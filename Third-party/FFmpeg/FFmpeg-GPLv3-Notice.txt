@@ -1,0 +1,18 @@
+Kinetho bundles FFmpeg 9.0.2 Essentials for Windows, a static GPLv3 build provided by Gyan Doshi.
+
+The bundled FFmpeg includes libx264, which Kinetho uses for video encoding. The FFmpeg executable is a separate program launched by Kinetho; Kinetho itself is released under the MIT License.
+
+License text: COPYING.GPLv3.txt
+Build configuration and included libraries (with versions): README.txt
+Windows build provider and build information: https://www.gyan.dev/ffmpeg/builds/
+Binary archive SHA-256: 60F467265B1E312373DBCD92200C2618A74850F98D3D078E94296BB3FA2047BA
+
+Corresponding source code
+- FFmpeg source: ffmpeg-9.0.2.tar.xz, published with its PGP signature as an asset of each Kinetho release:
+  https://github.com/raphael-THMS/Kinetho/releases
+  It matches FFmpeg tag n9.0.2 (commit 946fcce07b6dcd0331c8cc609192aeff5e1924f8), the revision used for the bundled build.
+  Source SHA-256: 8C3850283EB25FA026482078A04051E0BE17347B09EF81A0849BEC15A96E002E
+- Official upstream copy: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+- Source code of the third-party libraries listed in README.txt is available on request for at least three years after each release, by opening an issue at https://github.com/raphael-THMS/Kinetho/issues
+
+When redistributing this FFmpeg executable, keep these notices and comply with the GPLv3.

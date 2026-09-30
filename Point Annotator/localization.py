@@ -1,0 +1,258 @@
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+
+LANGUAGES = {"English": "en", "Français": "fr"}
+
+FRENCH = {
+    "Language": "Langue",
+    "Video preparation and point annotation": "Préparation vidéo et annotation de points",
+    "Point Annotator": "Annotateur de points",
+    "Open annotator": "Ouvrir l’annotateur",
+    "Open an image folder and place named points on each frame.": "Ouvrez un dossier d’images et placez les points nommés sur chaque image.",
+    "Video Processing": "Traitement vidéo",
+    "Edit videos or extract frames with the built-in FFmpeg workflow.": "Modifiez des vidéos ou extrayez des images avec FFmpeg.",
+    "Open video processing": "Ouvrir le traitement vidéo",
+    "Open the Kinetho guide": "Ouvrir le guide Kinetho",
+    "Uninstall Kinetho": "Désinstaller Kinetho",
+    "Configure Points": "Configurer les points",
+    "Configure annotation points": "Configurer les points d’annotation",
+    "Add, rename, remove, or reorder the points used for every image.": "Ajoutez, renommez, supprimez ou réorganisez les points utilisés pour chaque image.",
+    "Point name": "Nom du point",
+    "Add point": "Ajouter un point",
+    "Rename selected": "Renommer la sélection",
+    "Remove selected": "Supprimer la sélection",
+    "Move up": "Monter",
+    "Move down": "Descendre",
+    "Cancel": "Annuler",
+    "Save and Continue": "Enregistrer et continuer",
+    "point(s)": "point(s)",
+    "Point name required": "Nom de point requis",
+    "Enter a name for the point.": "Saisissez un nom pour le point.",
+    "Duplicate point": "Point en double",
+    "Each point name must be unique.": "Chaque nom de point doit être unique.",
+    "Select a point": "Sélectionner un point",
+    "Select a point to rename.": "Sélectionnez un point à renommer.",
+    "Select a point to remove.": "Sélectionnez un point à supprimer.",
+    "Add a point": "Ajouter un point",
+    "Add at least one annotation point to continue.": "Ajoutez au moins un point d’annotation pour continuer.",
+    "Duplicate point names": "Noms de points en double",
+    "Could not save points": "Impossible d’enregistrer les points",
+    "Could not start Point Annotator": "Impossible de lancer l’annotateur de points",
+    "VIDEO PROCESSING": "TRAITEMENT VIDÉO",
+    "FFmpeg workflow": "Traitement avec FFmpeg",
+    "Input and output": "Entrée et sortie",
+    "Input videos": "Vidéos source",
+    "Output": "Sortie",
+    "Choose folder...": "Choisir un dossier...",
+    "Choose video...": "Choisir une vidéo...",
+    "Choose the input video folder": "Choisir le dossier des vidéos source",
+    "Choose a video to process": "Choisir une vidéo à traiter",
+    "Choose the output folder": "Choisir le dossier de sortie",
+    "Operation": "Opération",
+    "Explain the selected operation": "Explication de l’opération sélectionnée",
+    "Settings": "Paramètres",
+    "Start processing": "Démarrer le traitement",
+    "Ready": "Prêt",
+    "Activity": "Activité",
+    "Browse...": "Parcourir...",
+    "Correction": "Correction",
+    "Encoding": "Encodage",
+    "Keep audio": "Conserver l’audio",
+    "Adjust timestamps": "Ajuster les horodatages",
+    "Drop every second frame": "Supprimer une image sur deux",
+    "Fast": "Rapide",
+    "High quality": "Haute qualité",
+    "Preset": "Préréglage",
+    "Brighten": "Éclaircir",
+    "Denoise + sharpen": "Réduire le bruit + accentuer",
+    "Brighten + denoise + sharpen": "Éclaircir + réduire le bruit + accentuer",
+    "Re-encode only": "Réencoder uniquement",
+    "Start times": "Temps de début",
+    "Durations": "Durées",
+    "Use comma-separated values: 30s, 5m, 1h, mm:ss, or hh:mm:ss. Bare numbers still mean minutes. One duration applies to all parts.": "Séparez les valeurs par des virgules : 30s, 5m, 1h, mm:ss ou hh:mm:ss. Un nombre seul est en minutes. Une durée peut s’appliquer à toutes les parties.",
+    "Cut mode": "Mode de découpe",
+    "Fast (keyframe cuts)": "Rapide (coupes aux images clés)",
+    "Precise (re-encode)": "Précis (réencodage)",
+    "Crop / split": "Recadrage / division",
+    "Manual crop": "Recadrage manuel",
+    "Keep one equal slice": "Garder une tranche égale",
+    "Split into two halves": "Diviser en deux moitiés",
+    "Split into four quadrants": "Diviser en quatre quadrants",
+    "Direction": "Direction",
+    "Vertical (left/right)": "Verticale (gauche/droite)",
+    "Horizontal (top/bottom)": "Horizontale (haut/bas)",
+    "Number of slices": "Nombre de tranches",
+    "Slice to keep": "Tranche à conserver",
+    "Margins L, R, T, B": "Marges G, D, H, B",
+    "Manual crop margins are fractions from 0 to 0.5, entered as left, right, top, bottom.": "Les marges de recadrage sont des fractions de 0 à 0,5, saisies dans l’ordre gauche, droite, haut, bas.",
+    "Frame interval": "Intervalle entre les images",
+    "Time unit": "Unité de temps",
+    "Seconds": "Secondes",
+    "Minutes": "Minutes",
+    "Hours": "Heures",
+    "Image format": "Format d’image",
+    "The first decoded frame is always saved, then one frame is saved after each interval.": "La première image décodée est toujours enregistrée, puis une image est extraite à chaque intervalle.",
+    "Merge mode": "Mode de fusion",
+    "Safe (re-encode)": "Fiable (réencodage)",
+    "Fast (stream copy)": "Rapide (copie des flux)",
+    "Merge files named Name_1.mp4, Name_2.mp4, etc.": "Fusionne les fichiers nommés Nom_1.mp4, Nom_2.mp4, etc.",
+    "Repair mode": "Mode de réparation",
+    "Correct doubled duration": "Corriger la durée doublée",
+    "Enhance quality / brightness": "Améliorer la qualité / luminosité",
+    "Split by time": "Découper par durée",
+    "Crop or split by dimensions": "Recadrer ou diviser par dimensions",
+    "Extract frames": "Extraire les images",
+    "Merge numbered parts": "Fusionner les parties numérotées",
+    "Repair duration / timestamps": "Réparer la durée / les horodatages",
+    "About: ": "À propos : ",
+    "No explanation is available for this operation.": "Aucune explication n’est disponible pour cette opération.",
+    "Correct a video whose recorded playback is twice as fast as intended. Adjust timestamps to slow it down, or drop every second frame when frames were duplicated. The result is re-encoded; choose whether to keep the original audio.": "Corrige une vidéo enregistrée deux fois trop vite. Ajuste les horodatages ou supprime une image sur deux si les images ont été dupliquées. La vidéo est réencodée ; choisissez si l’audio d’origine doit être conservé.",
+    "Apply a visual preset to every input video: brighten, denoise and sharpen, combine those filters, or re-encode without a visual filter. The selected encoding profile controls output quality and speed.": "Applique un préréglage à chaque vidéo : éclaircissement, réduction du bruit, accentuation, combinaison de ces filtres ou réencodage sans filtre. Le profil d’encodage détermine la qualité et la vitesse.",
+    "Create video segments from the start times and durations you enter. Values accept seconds, minutes, hours, mm:ss, or hh:mm:ss; one duration can be reused for all segments. Fast cuts may snap to keyframes, while precise cuts re-encode.": "Crée des segments selon les temps de début et durées saisis. Les valeurs acceptent les secondes, minutes, heures, mm:ss ou hh:mm:ss ; une durée peut être réutilisée. Les coupes rapides se calent sur les images clés, les coupes précises réencodent.",
+    "Crop each video using margins, keep one equal slice, split into two halves, or create four quadrants. Cropped and split outputs are re-encoded with the selected profile.": "Recadre chaque vidéo avec des marges, conserve une tranche égale, divise en deux ou en quatre. Les résultats sont réencodés avec le profil choisi.",
+    "Save the first decoded frame, then sample frames at the selected seconds/minutes/hours interval. MP4/MOV edit lists are handled so a stored final frame is not silently omitted. Frames are grouped into one subfolder per source video; the originals are unchanged.": "Enregistre la première image décodée, puis extrait des images selon l’intervalle choisi en secondes, minutes ou heures. Les listes de montage MP4/MOV sont prises en compte pour ne pas omettre la dernière image. Les images sont regroupées par vidéo source ; les originaux restent inchangés.",
+    "Join video parts named like Name_1.mp4, Name_2.mp4, and so on. Safe mode re-encodes for reliable timestamps; fast mode copies streams and works best when all parts have matching codecs and settings.": "Assemble les parties nommées Nom_1.mp4, Nom_2.mp4, etc. Le mode fiable réencode pour obtenir des horodatages cohérents ; le mode rapide copie les flux et convient aux parties ayant les mêmes codecs et paramètres.",
+    "Repair videos with incorrect duration or damaged timestamps. Fast mode remuxes without re-encoding; safe mode re-encodes and is slower but can repair more timestamp problems.": "Répare les vidéos dont la durée ou les horodatages sont incorrects. Le mode rapide remuxe sans réencodage ; le mode fiable réencode, ce qui est plus lent mais peut corriger davantage de problèmes.",
+    "About: {operation}": "À propos : {operation}",
+    "Select the folder containing images": "Sélectionner le dossier contenant les images",
+    "Open image folder": "Ouvrir un dossier d’images",
+    "Advance after placing a point": "Passer à l’image suivante après avoir placé un point",
+    "No folder open": "Aucun dossier ouvert",
+    "Points to annotate": "Points à annoter",
+    "Select a point, then click the image to place it. Click again to move that point.": "Sélectionnez un point, puis cliquez sur l’image pour le placer. Cliquez à nouveau pour le déplacer.",
+    "Delete selected point": "Supprimer le point sélectionné",
+    "Previous image": "Image précédente",
+    "Next image": "Image suivante",
+    "No image": "Aucune image",
+    "Left/right arrows: navigate | Delete: remove point": "Flèches gauche/droite : naviguer | Suppr : retirer un point",
+    "No points configured": "Aucun point configuré",
+    "Add at least one point name to points.txt, then restart the application.": "Ajoutez au moins un nom de point dans points.txt, puis relancez l’application.",
+    "points.txt not found": "Fichier points.txt introuvable",
+    "Each point name in points.txt must be unique.": "Chaque nom de point dans points.txt doit être unique.",
+    "No images found": "Aucune image trouvée",
+    "This folder contains no supported image files.": "Ce dossier ne contient aucun format d’image pris en charge.",
+    "Read error": "Erreur de lecture",
+    "Could not read {path}:\n{error}": "Impossible de lire {path} :\n{error}",
+    "Save error": "Erreur d’enregistrement",
+    "Could not write {path}:\n{error}": "Impossible d’écrire {path} :\n{error}",
+    "Unreadable image": "Image illisible",
+    "Could not open {path}:\n{error}": "Impossible d’ouvrir {path} :\n{error}",
+    "Image {index}/{total}: {name}  |  {placed}/{count} points placed  |  Selected: {selected}": "Image {index}/{total} : {name}  |  {placed}/{count} points placés  |  Sélection : {selected}",
+    "no point selected": "aucun point sélectionné",
+    "Configure annotation points": "Configurer les points d’annotation",
+    "Open the Kinetho guide": "Ouvrir le guide Kinetho",
+    "Kinetho User Guide": "Guide d’utilisation de Kinetho",
+    "Close": "Fermer",
+    "Guide not found": "Guide introuvable",
+    "Application not installed": "Application non installée",
+    "Run Setup.bat in the Point Annotator folder before starting the application.": "Exécutez Setup.bat dans le dossier Point Annotator avant de lancer l’application.",
+    "Application file missing": "Fichier de l’application manquant",
+    "Uninstall Kinetho": "Désinstaller Kinetho",
+    "This option is available in the installed Kinetho application.": "Cette option est disponible dans la version installée de Kinetho.",
+    "Remove Kinetho, its bundled FFmpeg dependency, and the Kinetho desktop shortcut?\n\nYour point configuration, videos, extracted images, and annotations will be kept.\nClose any other Kinetho or Point Annotator windows before continuing.": "Désinstaller Kinetho, FFmpeg et le raccourci du Bureau ?\n\nLa configuration des points, les vidéos, les images extraites et les annotations seront conservées.\nFermez les autres fenêtres Kinetho ou Annotateur de points avant de continuer.",
+    "Uninstaller not found": "Programme de désinstallation introuvable",
+    "Could not start uninstaller": "Impossible de lancer la désinstallation",
+    "Kinetho will close now. The uninstaller will remove the application and FFmpeg, then confirm when cleanup is complete. Your data folders will be kept.": "Kinetho va se fermer. La désinstallation supprimera l’application et FFmpeg, puis confirmera la fin du nettoyage. Vos dossiers de données seront conservés.",
+    "Choose the input video folder": "Choisir le dossier des vidéos source",
+    "Choose a video to process": "Choisir une vidéo à traiter",
+    "Choose the output folder": "Choisir le dossier de sortie",
+    "Use comma-separated values: 30s, 5m, 1h, mm:ss, or hh:mm:ss. Bare numbers still mean minutes. One duration applies to all parts.": "Séparez les valeurs par des virgules : 30s, 5m, 1h, mm:ss ou hh:mm:ss. Un nombre seul est en minutes. Une durée peut s’appliquer à toutes les parties.",
+    "Could not save language preference": "Impossible d’enregistrer la langue",
+    "Language change delayed": "Changement de langue différé",
+    "Report a bug": "Signaler un bug",
+    "Bug reporting is not available yet. It will be added in a future version.": "Le signalement de bugs n’est pas encore disponible. Il sera ajouté dans une prochaine version.",
+    "Finish or cancel video processing before changing the language.": "Terminez ou annulez le traitement vidéo avant de changer de langue.",
+    "Starting {operation} for {count} video(s).": "Démarrage de l’opération « {operation} » pour {count} vidéo(s).",
+    "Skipping {count} file(s) with unsupported extensions: {names}": "Ignorer {count} fichier(s) ayant des extensions non prises en charge : {names}",
+    "A video that cannot be decoded will be marked as failed; other videos will continue.": "Une vidéo illisible sera signalée comme échec ; le traitement des autres vidéos continuera.",
+    "Cannot start processing": "Impossible de démarrer le traitement",
+    "Processing: {name}": "Traitement : {name}",
+    "FAILED ({code}): {name}": "ÉCHEC ({code}) : {name}",
+    "ERROR: {error}": "ERREUR : {error}",
+    "Cancelled": "Annulé",
+    "Processing cancelled. Completed outputs were kept.": "Traitement annulé. Les résultats déjà créés sont conservés.",
+    "Finished: {completed}/{total} succeeded; {failed} failed": "Terminé : {completed}/{total} réussis ; {failed} échec(s)",
+    "Finished: {completed} succeeded, {failed} failed. Other videos were not stopped.": "Terminé : {completed} réussi(s), {failed} échec(s). Le traitement des autres vidéos n’a pas été interrompu.",
+    "Complete": "Terminé",
+    "Finished successfully: {count} task(s).": "Terminé avec succès : {count} tâche(s).",
+    "Processing is active": "Traitement en cours",
+    "Cancel processing and close this window?": "Annuler le traitement et fermer cette fenêtre ?",
+    "Cancelling after the current task...": "Annulation après la tâche en cours...",
+    "Enter one duration or one duration for each start time.": "Saisissez une durée unique ou une durée pour chaque temps de début.",
+    "Slice to keep must not exceed the number of slices.": "La tranche à conserver ne peut pas dépasser le nombre de tranches.",
+    "Opposing crop margins must add up to less than 1.": "La somme des marges de recadrage opposées doit être inférieure à 1.",
+    "No folder open": "Aucun dossier ouvert",
+    "Select a point, then click the image to place it. Click again to move that point.": "Sélectionnez un point, puis cliquez sur l’image pour le placer. Cliquez à nouveau pour le déplacer.",
+    "No videos match the Name_1, Name_2 naming pattern.": "Aucune vidéo ne correspond au modèle de nommage Nom_1, Nom_2.",
+    "Each merge group needs at least two numbered parts.": "Chaque groupe à fusionner doit contenir au moins deux parties numérotées.",
+    "FFmpeg was not found. Install FFmpeg and add it to PATH, or place ffmpeg.exe in ffmpeg\\bin.": "FFmpeg est introuvable. Vérifiez que le dossier ffmpeg\\bin est présent dans Kinetho.",
+}
+
+_DYNAMIC_FRENCH = (
+    (
+        re.compile(r"^Unsupported video file: (?P<path>.+)\nSupported extensions include MP4, MOV, MKV, AVI, WMV, WebM, MPEG, and TS\.$"),
+        "Fichier vidéo non pris en charge : {path}\nFormats acceptés : MP4, MOV, MKV, AVI, WMV, WebM, MPEG et TS.",
+    ),
+    (re.compile(r"^Input folder or video file does not exist: (?P<path>.+)$"), "Le dossier ou fichier vidéo source n’existe pas : {path}"),
+    (
+        re.compile(r"^No supported video files found in: (?P<path>.+)\nSupported extensions include MP4, MOV, MKV, AVI, WMV, WebM, MPEG, and TS\.$"),
+        "Aucun fichier vidéo pris en charge dans : {path}\nFormats acceptés : MP4, MOV, MKV, AVI, WMV, WebM, MPEG et TS.",
+    ),
+    (re.compile(r"^Invalid (?P<label>.+): (?P<value>.+)\. Use 30s, 5m, 1h, mm:ss, or hh:mm:ss\.$"), "Valeur invalide pour {label} : {value}. Utilisez 30s, 5m, 1h, mm:ss ou hh:mm:ss."),
+    (re.compile(r"^Invalid (?P<label>.+): values must be positive; start times may be zero\.$"), "Valeur invalide pour {label} : les valeurs doivent être positives ; le temps de début peut être zéro."),
+    (re.compile(r"^Enter at least one value for (?P<label>.+)\.$"), "Saisissez au moins une valeur pour {label}."),
+    (re.compile(r"^Enter comma-separated numeric values for (?P<label>.+)\.$"), "Saisissez des valeurs numériques séparées par des virgules pour {label}."),
+    (re.compile(r"^Enter exactly (?P<count>\d+) values between 0 and 0\.5 for (?P<label>.+)\.$"), "Saisissez exactement {count} valeurs comprises entre 0 et 0,5 pour {label}."),
+    (re.compile(r"^(?P<label>.+) must be a whole number\.$"), "{label} doit être un nombre entier."),
+    (re.compile(r"^(?P<label>.+) must be at least 1\.$"), "{label} doit être au moins égal à 1."),
+    (re.compile(r"^(?P<label>.+) must be a number\.$"), "{label} doit être un nombre."),
+    (re.compile(r"^(?P<label>.+) must be greater than 0\.$"), "{label} doit être supérieur à 0."),
+    (re.compile(r"^Merge group (?P<name>.+) contains mixed file extensions\.$"), "Le groupe {name} contient plusieurs extensions de fichier."),
+)
+
+
+def settings_directory() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+def load_language() -> str:
+    settings_file = settings_directory() / "kinetho_settings.json"
+    try:
+        settings = json.loads(settings_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "en"
+    language = settings.get("language", "en")
+    return language if language in {"en", "fr"} else "en"
+
+
+def save_language(language: str) -> None:
+    if language not in {"en", "fr"}:
+        raise ValueError(f"Unsupported language: {language}")
+    settings_file = settings_directory() / "kinetho_settings.json"
+    temporary_file = settings_file.with_suffix(".json.tmp")
+    temporary_file.write_text(json.dumps({"language": language}, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary_file.replace(settings_file)
+
+
+def translate(text: str, language: str) -> str:
+    if language == "fr":
+        translated = FRENCH.get(text)
+        if translated is not None:
+            return translated
+        for pattern, template in _DYNAMIC_FRENCH:
+            match = pattern.fullmatch(text)
+            if match is not None:
+                return template.format(**match.groupdict())
+    return text
+
+
+def english_text(text: str, language: str) -> str:
+    if language == "fr":
+        return {translated: source for source, translated in FRENCH.items()}.get(text, text)
+    return text
