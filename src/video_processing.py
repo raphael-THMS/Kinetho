@@ -21,7 +21,6 @@ ROOT_DIR = APP_DIR if FROZEN else APP_DIR.parent
 RAW_VIDEO_DIR = ROOT_DIR / "Video edition" / "Videos_before_modifications"
 PROCESSED_VIDEO_DIR = ROOT_DIR / "Videos"
 IMAGE_OUTPUT_DIR = ROOT_DIR / "Image folders"
-MERGE_HELPER = ROOT_DIR / "Video edition" / "merge_by_suffix.ps1"
 VIDEO_EXTENSIONS = {
     ".3gp",
     ".asf",
@@ -643,9 +642,12 @@ class VideoProcessingWindow:
         return tasks
 
     def _find_ffmpeg(self) -> str:
-        local = ROOT_DIR / "ffmpeg" / "bin" / "ffmpeg.exe"
-        if local.is_file():
-            return str(local)
+        for local in (
+            ROOT_DIR / "ffmpeg" / "bin" / "ffmpeg.exe",
+            ROOT_DIR / "Third-party" / "FFmpeg" / "bin" / "ffmpeg.exe",
+        ):
+            if local.is_file():
+                return str(local)
         import shutil
 
         resolved = shutil.which("ffmpeg")

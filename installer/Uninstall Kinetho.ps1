@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$InstallRoot = $env:KINETHO_INSTALL_DIR,
     [string]$DesktopPath = [Environment]::GetFolderPath('Desktop'),
     [int]$WaitProcessId = 0,
@@ -7,9 +7,36 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$language = if ((Get-UICulture).TwoLetterISOLanguageName -eq 'fr') { 'fr' } else { 'en' }
+try {
+    $settingsFile = Join-Path $InstallRoot 'kinetho_settings.json'
+    if ($InstallRoot -and (Test-Path -LiteralPath $settingsFile)) {
+        $savedLanguage = (Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json).language
+        if ($savedLanguage -in @('en', 'fr')) { $language = $savedLanguage }
+    }
+} catch {
+    # An unreadable settings file only affects the message language.
+}
+$messages = @{
+    en = @{
+        NoFolder     = 'The Kinetho installation folder was not provided.'
+        StillOpen    = 'Another Kinetho window is still open. Close it and run the uninstaller again.'
+        DoneTitle    = 'Kinetho Uninstalled'
+        Done         = "Kinetho and its bundled FFmpeg dependency have been removed.`r`n`r`nYour point configuration, videos, extracted images, and annotations were kept in:`r`n{0}"
+        FailedTitle  = 'Kinetho Uninstall Failed'
+    }
+    fr = @{
+        NoFolder     = "Le dossier d'installation de Kinetho n'a pas été indiqué."
+        StillOpen    = 'Une autre fenêtre Kinetho est encore ouverte. Fermez-la, puis relancez la désinstallation.'
+        DoneTitle    = 'Kinetho désinstallé'
+        Done         = "Kinetho et FFmpeg ont été supprimés.`r`n`r`nVotre configuration des points, vos vidéos, les images extraites et les annotations ont été conservées dans :`r`n{0}"
+        FailedTitle  = 'Échec de la désinstallation de Kinetho'
+    }
+}[$language]
+
 try {
     if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
-        throw 'The Kinetho installation folder was not provided.'
+        throw $messages.NoFolder
     }
     $InstallRoot = [IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
     if ($WaitProcessId -gt 0) {
@@ -30,7 +57,7 @@ try {
         Start-Sleep -Milliseconds 500
     }
     if ($runningKinetho.Count -gt 0) {
-        throw 'Another Kinetho window is still open. Close it and run the uninstaller again.'
+        throw $messages.StillOpen
     }
 
     $shortcut = Join-Path $DesktopPath 'Kinetho.lnk'
@@ -53,16 +80,18 @@ try {
             Remove-Item -LiteralPath $file -Force
         }
     }
-    $ffmpegDirectory = Join-Path $InstallRoot 'ffmpeg'
-    if (Test-Path -LiteralPath $ffmpegDirectory) {
-        Remove-Item -LiteralPath $ffmpegDirectory -Recurse -Force
+    foreach ($directoryName in @('ffmpeg', '_internal')) {
+        $appDirectory = Join-Path $InstallRoot $directoryName
+        if (Test-Path -LiteralPath $appDirectory) {
+            Remove-Item -LiteralPath $appDirectory -Recurse -Force
+        }
     }
 
     if (-not $Quiet) {
         Add-Type -AssemblyName System.Windows.Forms
         [System.Windows.Forms.MessageBox]::Show(
-            "Kinetho and its bundled FFmpeg dependency have been removed.`r`n`r`nYour point configuration, videos, extracted images, and annotations were kept in:`r`n$InstallRoot",
-            'Kinetho Uninstalled',
+            ($messages.Done -f $InstallRoot),
+            $messages.DoneTitle,
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Information
         ) | Out-Null
@@ -72,7 +101,7 @@ try {
         Add-Type -AssemblyName System.Windows.Forms
         [System.Windows.Forms.MessageBox]::Show(
             $_.Exception.Message,
-            'Kinetho Uninstall Failed',
+            $messages.FailedTitle,
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Error
         ) | Out-Null

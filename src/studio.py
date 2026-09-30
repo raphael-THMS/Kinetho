@@ -32,8 +32,7 @@ README_PATH = ROOT_DIR / "README.md"
 README_FR_PATH = ROOT_DIR / "README-fr.md"
 UNINSTALL_SCRIPT = APP_DIR / "Uninstall Kinetho.ps1"
 BUG_REPORT_URL = "https://github.com/raphael-THMS/Kinetho/issues"
-POINT_ANNOTATOR_SCRIPT = APP_DIR / "point_annotator.py"
-PYTHONW = APP_DIR / ".venv" / "Scripts" / "pythonw.exe"
+ENTRY_SCRIPT = APP_DIR / "kinetho_app.py"
 POINTS_FILE = ROOT_DIR / "points.txt" if FROZEN else APP_DIR / "points.txt"
 
 
@@ -590,19 +589,6 @@ class VideoTrackingStudio:
         ).pack(side="right")
 
     def open_point_annotator(self, image_folder: Path | None = None) -> None:
-        if not FROZEN and not PYTHONW.is_file():
-            messagebox.showerror(
-                translate("Application not installed", self.language),
-                translate("Run Setup.bat in the Point Annotator folder before starting the application.", self.language),
-                parent=self.root,
-            )
-            return
-        if not FROZEN and not POINT_ANNOTATOR_SCRIPT.is_file():
-            messagebox.showerror(
-                translate("Application file missing", self.language), str(POINT_ANNOTATOR_SCRIPT), parent=self.root
-            )
-            return
-
         if self.point_configuration_window is not None and self.point_configuration_window.window.winfo_exists():
             self.point_configuration_window.window.deiconify()
             self.point_configuration_window.window.lift()
@@ -616,7 +602,7 @@ class VideoTrackingStudio:
 
     def _launch_point_annotator(self, image_folder: Path | None) -> None:
         self.point_configuration_window = None
-        command = [sys.executable, "--point-annotator"] if FROZEN else [str(PYTHONW), str(POINT_ANNOTATOR_SCRIPT)]
+        command = [sys.executable, "--point-annotator"] if FROZEN else [sys.executable, str(ENTRY_SCRIPT), "--point-annotator"]
         if image_folder is not None:
             command.append(str(image_folder))
         try:
