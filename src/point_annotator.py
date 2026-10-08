@@ -10,13 +10,14 @@ from PIL import Image, ImageTk
 
 from branding import BRAND_BACKGROUND, BRAND_BLACK, BRAND_NAME, BRAND_RED, load_logo, load_window_icon
 from localization import load_language, translate
+from app_paths import WORKSPACE_DIR, points_file
 
 
 APP_DIR = Path(__file__).resolve().parent
 FROZEN = getattr(sys, "frozen", False)
-APP_ROOT = Path(sys.executable).resolve().parent if FROZEN else APP_DIR.parent
+APP_ROOT = WORKSPACE_DIR
 INPUT_DIR = APP_ROOT / "Image folders"
-POINTS_FILE = (APP_ROOT if FROZEN else APP_DIR) / "points.txt"
+POINTS_FILE = points_file()
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 POINT_COLORS = [
     "#e6194b",
@@ -74,8 +75,18 @@ class PointAnnotator:
         self.image: Image.Image | None = None
         self.photo: ImageTk.PhotoImage | None = None
         self.display_scale = 1.0
+        self.base_scale = 1.0
         self.display_offset = (0.0, 0.0)
         self.display_size = (0, 0)
+        self.zoom_factor = 1.0
+        self.pan_offset = (0.0, 0.0)
+        self.pan_start: tuple[float, float] | None = None
+        self.tool_mode = tk.StringVar(master=root, value="point")
+        self.annotation_mode = tk.StringVar(master=root, value="point_by_point")
+        self.zoom_preview_id: str | None = None
+        self.zoom_quality_id: str | None = None
+        self.active_point_drag: str | None = None
+        self.advance_after_point_drag = False
 
         self._build_interface()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -125,12 +136,6 @@ class PointAnnotator:
             text=translate("Open image folder", self.language),
             command=self.choose_folder,
         ).pack(side="left")
-        self.auto_advance = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
-            toolbar,
-            text=translate("Advance after placing a point", self.language),
-            variable=self.auto_advance,
-        ).pack(side="right", padx=(12, 0))
         self.folder_label = ttk.Label(toolbar, text=translate("No folder open", self.language), anchor="w")
         self.folder_label.pack(side="left", fill="x", expand=True, padx=(12, 0))
 
@@ -141,40 +146,100 @@ class PointAnnotator:
         side_panel.pack(side="left", fill="y", padx=(0, 10))
         side_panel.pack_propagate(False)
 
+        points_section = ttk.Frame(side_panel)
+        points_section.pack(side="top", fill="both", expand=True)
         ttk.Label(
-            side_panel,
+            points_section,
             text=translate("Points to annotate", self.language),
             font=("Segoe UI", 11, "bold"),
             foreground=BRAND_RED,
         ).pack(anchor="w", pady=(4, 6))
-        self.point_list = tk.Listbox(side_panel, exportselection=False, activestyle="dotbox", font=("Segoe UI", 10))
-        self.point_list.pack(fill="both", expand=True)
+        point_list_frame = ttk.Frame(points_section)
+        point_list_frame.pack(fill="both", expand=True)
+        self.point_list = tk.Listbox(
+            point_list_frame, exportselection=False, activestyle="dotbox", font=("Segoe UI", 10)
+        )
+        self.point_list.pack(side="left", fill="both", expand=True)
+        point_scrollbar = ttk.Scrollbar(point_list_frame, orient="vertical", command=self.point_list.yview)
+        point_scrollbar.pack(side="right", fill="y")
+        self.point_list.configure(yscrollcommand=point_scrollbar.set)
         self.point_list.bind("<<ListboxSelect>>", self.on_point_selected)
         self.point_list.bind("<Double-Button-1>", self.on_point_selected)
+        self.point_list.bind("<MouseWheel>", self._scroll_point_list)
+        self.point_list.bind("<Button-4>", self._scroll_point_list)
+        self.point_list.bind("<Button-5>", self._scroll_point_list)
         for index, name in enumerate(self.point_names):
             self.point_list.insert("end", name)
             self.point_list.itemconfigure(index, foreground=self.point_color(name))
 
+        mode_section = ttk.Frame(side_panel)
+        mode_section.pack(side="bottom", fill="x", pady=(10, 0))
+        ttk.Separator(mode_section).pack(fill="x", pady=(0, 10))
         ttk.Label(
-            side_panel,
-            text=translate(
-                "Select a point, then click the image to place it. Click again to move that point.",
-                self.language,
-            ),
+            mode_section,
+            text=translate("Modes", self.language),
+            font=("Segoe UI", 11, "bold"),
+            foreground=BRAND_RED,
+        ).pack(anchor="w", pady=(0, 6))
+        ttk.Radiobutton(
+            mode_section,
+            text=translate("Point by point", self.language),
+            value="point_by_point",
+            variable=self.annotation_mode,
+        ).pack(fill="x", pady=2)
+        ttk.Radiobutton(
+            mode_section,
+            text=translate("Scroll through points", self.language),
+            value="scroll_points",
+            variable=self.annotation_mode,
+        ).pack(fill="x", pady=2)
+
+        tools_section = ttk.Frame(side_panel)
+        tools_section.pack(side="bottom", fill="x", pady=(10, 0))
+        ttk.Separator(tools_section).pack(fill="x", pady=(0, 10))
+        ttk.Label(
+            tools_section,
+            text=translate("Tools", self.language),
+            font=("Segoe UI", 11, "bold"),
+            foreground=BRAND_RED,
+        ).pack(anchor="w", pady=(0, 6))
+        ttk.Radiobutton(
+            tools_section,
+            text=translate("Place points", self.language),
+            value="point",
+            variable=self.tool_mode,
+            command=self._update_canvas_tool,
+        ).pack(fill="x", pady=2)
+        ttk.Radiobutton(
+            tools_section,
+            text=translate("Move image", self.language),
+            value="pan",
+            variable=self.tool_mode,
+            command=self._update_canvas_tool,
+        ).pack(fill="x", pady=2)
+        ttk.Label(
+            tools_section,
+            text=translate("Drag to place or move points | Move mode: click a point to select it", self.language),
             wraplength=205,
             justify="left",
-        ).pack(anchor="w", pady=(10, 0))
+            foreground="#5c5c5c",
+        ).pack(anchor="w", pady=(6, 0))
         ttk.Button(
-            side_panel,
+            tools_section,
             text=translate("Delete selected point", self.language),
             command=self.delete_selected_point,
         ).pack(
-            fill="x", pady=(10, 0)
+            fill="x", pady=(8, 0)
         )
 
         self.canvas = tk.Canvas(content, background="#202428", highlightthickness=0, cursor="crosshair")
         self.canvas.pack(side="left", fill="both", expand=True)
         self.canvas.bind("<Button-1>", self.on_canvas_click)
+        self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_canvas_release)
+        self.canvas.bind("<MouseWheel>", self.on_canvas_zoom)
+        self.canvas.bind("<Button-4>", self.on_canvas_zoom)
+        self.canvas.bind("<Button-5>", self.on_canvas_zoom)
         self.canvas.bind("<Configure>", lambda _event: self.redraw())
         self.canvas.bind("<Button-3>", lambda _event: self.delete_selected_point())
 
@@ -302,10 +367,14 @@ class PointAnnotator:
             )
             self.next_image()
             return
+        self._cancel_zoom_redraws()
+        self.zoom_factor = 1.0
+        self.pan_offset = (0.0, 0.0)
+        self.pan_start = None
         self.redraw()
         self.update_status()
 
-    def redraw(self) -> None:
+    def redraw(self, interactive: bool = False) -> None:
         self.canvas.delete("all")
         if self.image is None:
             return
@@ -313,21 +382,24 @@ class PointAnnotator:
         if canvas_width < 2 or canvas_height < 2:
             return
         image_width, image_height = self.image.size
-        self.display_scale = min(canvas_width / image_width, canvas_height / image_height, 1.0)
+        self.base_scale = min(canvas_width / image_width, canvas_height / image_height, 1.0)
+        self.display_scale = self.base_scale * self.zoom_factor
         self.display_size = (
             max(1, round(image_width * self.display_scale)),
             max(1, round(image_height * self.display_scale)),
         )
         self.display_offset = (
-            (canvas_width - self.display_size[0]) / 2,
-            (canvas_height - self.display_size[1]) / 2,
+            (canvas_width - self.display_size[0]) / 2 + self.pan_offset[0],
+            (canvas_height - self.display_size[1]) / 2 + self.pan_offset[1],
         )
-        rendered = self.image.resize(self.display_size, Image.Resampling.LANCZOS)
+        resampling = Image.Resampling.BILINEAR if interactive else Image.Resampling.LANCZOS
+        rendered = self.image.resize(self.display_size, resampling)
         self.photo = ImageTk.PhotoImage(rendered)
-        self.canvas.create_image(*self.display_offset, image=self.photo, anchor="nw")
+        self.canvas.delete("view")
+        self.canvas.create_image(*self.display_offset, image=self.photo, anchor="nw", tags=("view",))
 
         image_annotations = self.annotations.get(self.current_image_name(), {})
-        for point_name in self.point_names:
+        for point_index, point_name in enumerate(self.point_names):
             coordinate = image_annotations.get(point_name)
             if coordinate is None:
                 continue
@@ -342,7 +414,10 @@ class PointAnnotator:
                 fill=color,
                 outline="white",
                 width=2,
+                tags=("view",),
             )
+            marker_id = self.canvas.find_all()[-1]
+            self.canvas.addtag_withtag(f"point-marker-{point_index}", marker_id)
             self.canvas.create_text(
                 screen_x + 10,
                 screen_y - 10,
@@ -350,7 +425,10 @@ class PointAnnotator:
                 fill="white",
                 anchor="sw",
                 font=("Segoe UI", 10, "bold"),
+                tags=("view",),
             )
+            label_id = self.canvas.find_all()[-1]
+            self.canvas.addtag_withtag(f"point-label-{point_index}", label_id)
 
     def image_to_screen(self, x: float, y: float) -> tuple[float, float]:
         return (
@@ -358,8 +436,148 @@ class PointAnnotator:
             self.display_offset[1] + y * self.display_scale,
         )
 
+    def _scroll_point_list(self, event: tk.Event) -> str:
+        if getattr(event, "delta", 0):
+            direction = -1 if event.delta > 0 else 1
+        else:
+            direction = -1 if event.num == 4 else 1
+        self.point_list.yview_scroll(direction, "units")
+        return "break"
+
+    def _update_canvas_tool(self) -> None:
+        self.pan_start = None
+        self.canvas.configure(cursor="fleur" if self.tool_mode.get() == "pan" else "crosshair")
+
+    def _cancel_zoom_redraws(self) -> None:
+        if self.zoom_preview_id is not None:
+            self.root.after_cancel(self.zoom_preview_id)
+            self.zoom_preview_id = None
+        if self.zoom_quality_id is not None:
+            self.root.after_cancel(self.zoom_quality_id)
+            self.zoom_quality_id = None
+
+    def on_canvas_zoom(self, event: tk.Event) -> str:
+        if self.image is None:
+            return "break"
+        if getattr(event, "delta", 0):
+            steps = (
+                max(-4, min(4, event.delta / 10))
+                if sys.platform == "darwin"
+                else max(1, abs(event.delta) // 120) * (1 if event.delta > 0 else -1)
+            )
+        else:
+            steps = 1 if event.num == 4 else -1
+
+        new_zoom = min(8.0, max(0.1, self.zoom_factor * (1.2**steps)))
+        if new_zoom == self.zoom_factor:
+            return "break"
+
+        old_scale = self.base_scale * self.zoom_factor
+        canvas_width, canvas_height = self.canvas.winfo_width(), self.canvas.winfo_height()
+        image_width, image_height = self.image.size
+        old_offset_x = (canvas_width - round(image_width * old_scale)) / 2 + self.pan_offset[0]
+        old_offset_y = (canvas_height - round(image_height * old_scale)) / 2 + self.pan_offset[1]
+        image_x = (event.x - old_offset_x) / old_scale
+        image_y = (event.y - old_offset_y) / old_scale
+        new_scale = self.base_scale * new_zoom
+        centered_x = (canvas_width - round(image_width * new_scale)) / 2
+        centered_y = (canvas_height - round(image_height * new_scale)) / 2
+        self.pan_offset = (
+            event.x - image_x * new_scale - centered_x,
+            event.y - image_y * new_scale - centered_y,
+        )
+        self.zoom_factor = new_zoom
+        self.display_scale = new_scale
+        self.display_size = (max(1, round(image_width * new_scale)), max(1, round(image_height * new_scale)))
+        self.display_offset = (centered_x + self.pan_offset[0], centered_y + self.pan_offset[1])
+        if self.zoom_preview_id is None:
+            self.zoom_preview_id = self.root.after(16, self._redraw_zoom_preview)
+        if self.zoom_quality_id is not None:
+            self.root.after_cancel(self.zoom_quality_id)
+        self.zoom_quality_id = self.root.after(140, self._redraw_zoom_quality)
+        return "break"
+
+    def _redraw_zoom_preview(self) -> None:
+        self.zoom_preview_id = None
+        self.redraw(interactive=True)
+
+    def _redraw_zoom_quality(self) -> None:
+        self.zoom_quality_id = None
+        self.redraw()
+
+    def on_canvas_drag(self, event: tk.Event) -> None:
+        if self.active_point_drag is not None:
+            self._move_active_point(event.x, event.y)
+            return
+        if self.tool_mode.get() != "pan" or self.pan_start is None:
+            return
+        delta_x = event.x - self.pan_start[0]
+        delta_y = event.y - self.pan_start[1]
+        self.pan_offset = (self.pan_offset[0] + delta_x, self.pan_offset[1] + delta_y)
+        self.display_offset = (self.display_offset[0] + delta_x, self.display_offset[1] + delta_y)
+        self.pan_start = (event.x, event.y)
+        self.canvas.move("view", delta_x, delta_y)
+
+    def on_canvas_release(self, _event: tk.Event) -> None:
+        self.pan_start = None
+        if self.active_point_drag is None:
+            return
+        should_advance = self.advance_after_point_drag
+        self.active_point_drag = None
+        self.advance_after_point_drag = False
+        self.update_status()
+        if not should_advance:
+            return
+        if self.annotation_mode.get() == "point_by_point":
+            self.next_image()
+            return
+        selection = self.point_list.curselection()
+        next_point = selection[0] + 1 if selection else 0
+        if next_point < len(self.point_names):
+            self.select_point(next_point)
+            self.update_status()
+
+    def _point_at(self, screen_x: float, screen_y: float, radius: float = 12) -> str | None:
+        image_annotations = self.annotations.get(self.current_image_name(), {})
+        nearest_name = None
+        nearest_distance = radius
+        for point_name in self.point_names:
+            coordinate = image_annotations.get(point_name)
+            if coordinate is None:
+                continue
+            point_x, point_y = self.image_to_screen(*coordinate)
+            distance = ((screen_x - point_x) ** 2 + (screen_y - point_y) ** 2) ** 0.5
+            if distance <= nearest_distance:
+                nearest_name = point_name
+                nearest_distance = distance
+        return nearest_name
+
+    def _move_active_point(self, screen_x: float, screen_y: float) -> None:
+        if self.image is None or self.active_point_drag is None:
+            return
+        image_x = min(max((screen_x - self.display_offset[0]) / self.display_scale, 0), self.image.width - 1)
+        image_y = min(max((screen_y - self.display_offset[1]) / self.display_scale, 0), self.image.height - 1)
+        coordinate = (round(image_x, 2), round(image_y, 2))
+        self.annotations[self.current_image_name()][self.active_point_drag] = coordinate
+        point_index = self.point_names.index(self.active_point_drag)
+        marker_x, marker_y = self.image_to_screen(*coordinate)
+        self.canvas.coords(f"point-marker-{point_index}", marker_x - 6, marker_y - 6, marker_x + 6, marker_y + 6)
+        self.canvas.coords(f"point-label-{point_index}", marker_x + 10, marker_y - 10)
+        self.canvas.tag_raise(f"point-marker-{point_index}")
+        self.canvas.tag_raise(f"point-label-{point_index}")
+
     def on_canvas_click(self, event: tk.Event) -> None:
         if self.image is None or self.current_index >= len(self.image_paths):
+            return
+        if self.tool_mode.get() == "pan":
+            hit_point = self._point_at(event.x, event.y)
+            if hit_point is not None:
+                self.active_point_drag = hit_point
+                self.advance_after_point_drag = False
+                self.select_point(self.point_names.index(hit_point))
+                self.update_status()
+                return
+            self.pan_start = (event.x, event.y)
             return
         offset_x, offset_y = self.display_offset
         shown_width, shown_height = self.display_size
@@ -368,14 +586,10 @@ class PointAnnotator:
         selection = self.point_list.curselection()
         if not selection:
             return
-        x = min(max((event.x - offset_x) / self.display_scale, 0), self.image.width - 1)
-        y = min(max((event.y - offset_y) / self.display_scale, 0), self.image.height - 1)
-        point_name = self.point_names[selection[0]]
-        self.annotations[self.current_image_name()][point_name] = (round(x, 2), round(y, 2))
+        self.active_point_drag = self.point_names[selection[0]]
+        self.advance_after_point_drag = True
+        self._move_active_point(event.x, event.y)
         self.redraw()
-        self.update_status()
-        if self.auto_advance.get():
-            self.next_image()
 
     def on_point_selected(self, _event: tk.Event | None = None) -> None:
         self.update_status()

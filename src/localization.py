@@ -4,6 +4,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from app_paths import settings_directory
 
 LANGUAGES = {"English": "en", "Français": "fr"}
 
@@ -51,6 +52,8 @@ FRENCH = {
     "Choose video...": "Choisir une vidéo...",
     "Choose the input video folder": "Choisir le dossier des vidéos source",
     "Choose a video to process": "Choisir une vidéo à traiter",
+    "Select videos to process": "Sélectionner les vidéos à traiter",
+    "Video files": "Fichiers vidéo",
     "Choose the output folder": "Choisir le dossier de sortie",
     "Operation": "Opération",
     "Explain the selected operation": "Explication de l’opération sélectionnée",
@@ -120,9 +123,16 @@ FRENCH = {
     "About: {operation}": "À propos : {operation}",
     "Select the folder containing images": "Sélectionner le dossier contenant les images",
     "Open image folder": "Ouvrir un dossier d’images",
-    "Advance after placing a point": "Passer à l’image suivante après avoir placé un point",
     "No folder open": "Aucun dossier ouvert",
     "Points to annotate": "Points à annoter",
+    "Modes": "Modes",
+    "Point by point": "Point par point",
+    "Scroll through points": "Défilement des points",
+    "Tools": "Outils",
+    "Place points": "Placer les points",
+    "Move image": "Déplacer l’image",
+    "Mouse wheel: zoom | Drag in Move mode": "Molette : zoom | Faire glisser en mode déplacement",
+    "Drag to place or move points | Move mode: click a point to select it": "Faire glisser pour placer ou déplacer un point | Mode déplacement : cliquer un point pour le sélectionner",
     "Select a point, then click the image to place it. Click again to move that point.": "Sélectionnez un point, puis cliquez sur l’image pour le placer. Cliquez à nouveau pour le déplacer.",
     "Delete selected point": "Supprimer le point sélectionné",
     "Previous image": "Image précédente",
@@ -210,12 +220,6 @@ _DYNAMIC_FRENCH = (
     (re.compile(r"^(?P<label>.+) must be greater than 0\.$"), "{label} doit être supérieur à 0."),
     (re.compile(r"^Merge group (?P<name>.+) contains mixed file extensions\.$"), "Le groupe {name} contient plusieurs extensions de fichier."),
 )
-
-
-def settings_directory() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent
 
 
 def load_language() -> str:

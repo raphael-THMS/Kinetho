@@ -5,6 +5,12 @@ from pathlib import Path
 
 
 def main() -> None:
+    if "--self-test" in sys.argv[1:]:
+        from runtime_check import run
+
+        switch_index = sys.argv.index("--self-test")
+        run(Path(sys.argv[switch_index + 1]))
+        return
     if "--point-annotator" in sys.argv[1:]:
         from point_annotator import run
 

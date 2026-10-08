@@ -1,0 +1,42 @@
+name: Build Kinetho for macOS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          architecture: arm64
+      - name: Check native Apple Silicon and Tkinter
+        run: |
+          test "$(uname -m)" = "arm64"
+          python3 -c "import platform, tkinter; assert platform.machine() == 'arm64'; root = tkinter.Tk(); root.withdraw(); root.destroy()"
+      - name: Install build tools
+        run: brew install pkg-config
+      - name: Build standalone FFmpeg and x264 with corresponding sources
+        run: python3 scripts/build_ffmpeg_macos.py
+      - name: Build Kinetho app, ZIP and DMG
+        run: python3 scripts/macos.py --build
+      - name: Test bundled runtime and FFmpeg
+        run: |
+          python3 scripts/smoke_macos.py
+          codesign --verify --deep --strict .build-mac/dist/Kinetho.app
+          hdiutil verify release-mac/*.dmg
+      - name: Upload user-ready packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kinetho-macOS-Apple-Silicon
+          path: release-mac/*
+          if-no-files-found: error
+          retention-days: 30

@@ -23,17 +23,18 @@ from branding import (
 )
 from localization import LANGUAGES, load_language, save_language, translate
 from video_processing import VideoProcessingWindow
+from app_paths import IS_MAC, PROJECT_DIR, points_file
 
 
 FROZEN = getattr(sys, "frozen", False)
 APP_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
-ROOT_DIR = APP_DIR if FROZEN else APP_DIR.parent
-README_PATH = ROOT_DIR / "README.md"
-README_FR_PATH = ROOT_DIR / "README-fr.md"
+ROOT_DIR = PROJECT_DIR
+README_PATH = ROOT_DIR / ("README-Mac.md" if IS_MAC else "README.md")
+README_FR_PATH = ROOT_DIR / ("README-Mac.md" if IS_MAC else "README-fr.md")
 UNINSTALL_SCRIPT = APP_DIR / "Uninstall Kinetho.ps1"
 BUG_REPORT_URL = "https://github.com/raphael-THMS/Kinetho/issues"
 ENTRY_SCRIPT = APP_DIR / "kinetho_app.py"
-POINTS_FILE = ROOT_DIR / "points.txt" if FROZEN else APP_DIR / "points.txt"
+POINTS_FILE = points_file()
 
 
 class PointConfigurationWindow:
@@ -273,8 +274,8 @@ class VideoTrackingStudio:
         self.root = root
         self.language = load_language()
         self.root.title(BRAND_NAME)
-        self.root.geometry("820x520")
-        self.root.minsize(720, 460)
+        self.root.geometry("820x640")
+        self.root.minsize(720, 580)
         self.root.configure(background=BRAND_BACKGROUND)
 
         style = ttk.Style(root)
@@ -292,7 +293,7 @@ class VideoTrackingStudio:
             borderwidth=0,
         )
         style.map("Workflow.TButton", background=[("active", "#cc0000"), ("pressed", "#a90000")])
-        self.brand_logo = load_logo(root, (90, 70))
+        self.brand_logo = load_logo(root, (230, 160))
         self.window_icon = load_window_icon(root)
         if self.window_icon is not None:
             self.root.iconphoto(True, self.window_icon)
@@ -307,12 +308,9 @@ class VideoTrackingStudio:
         page = self.page
 
         brand_header = ttk.Frame(page)
-        brand_header.pack(anchor="w", fill="x", pady=(0, 18))
+        brand_header.pack(fill="x", pady=(0, 18))
         if self.brand_logo is not None:
-            ttk.Label(brand_header, image=self.brand_logo).pack(side="left", padx=(0, 15))
-        brand_text = ttk.Frame(brand_header)
-        brand_text.pack(side="left", anchor="center")
-        ttk.Label(brand_text, text=BRAND_NAME, font=("Segoe UI", 27, "bold"), foreground=BRAND_BLACK).pack(anchor="w")
+            ttk.Label(brand_header, image=self.brand_logo).pack(anchor="center")
         ttk.Label(
             page,
             text=translate("Video preparation and point annotation", self.language),
@@ -358,7 +356,8 @@ class VideoTrackingStudio:
             text=translate("Uninstall Kinetho", self.language),
             command=self.uninstall,
         )
-        uninstall_button.pack(side="left")
+        if not IS_MAC:
+            uninstall_button.pack(side="left")
         ttk.Button(
             footer,
             text=translate("Report a bug", self.language),

@@ -13,11 +13,12 @@ from tkinter import filedialog, messagebox, ttk
 
 from branding import BRAND_BACKGROUND, BRAND_BLACK, BRAND_MUTED, BRAND_NAME, BRAND_RED, load_logo, load_window_icon
 from localization import english_text, translate
+from app_paths import RESOURCE_DIR, PROJECT_DIR, WORKSPACE_DIR
 
 
 FROZEN = getattr(sys, "frozen", False)
 APP_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
-ROOT_DIR = APP_DIR if FROZEN else APP_DIR.parent
+ROOT_DIR = WORKSPACE_DIR
 RAW_VIDEO_DIR = ROOT_DIR / "Video edition" / "Videos_before_modifications"
 PROCESSED_VIDEO_DIR = ROOT_DIR / "Videos"
 IMAGE_OUTPUT_DIR = ROOT_DIR / "Image folders"
@@ -288,6 +289,16 @@ class VideoProcessingWindow:
         )
         if selected:
             self.input_dir.set(selected)
+
+    def _select_videos_to_process(self, input_path: Path) -> list[Path]:
+        patterns = " ".join(f"*{extension}" for extension in sorted(VIDEO_EXTENSIONS))
+        selected = filedialog.askopenfilenames(
+            parent=self.window,
+            title=translate("Select videos to process", self.language),
+            initialdir=input_path,
+            filetypes=((translate("Video files", self.language), patterns),),
+        )
+        return [Path(path) for path in selected]
 
     def _choose_output(self) -> None:
         operation_label = english_text(self.operation.get(), self.language)
@@ -642,9 +653,11 @@ class VideoProcessingWindow:
         return tasks
 
     def _find_ffmpeg(self) -> str:
+        executable_name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
         for local in (
-            ROOT_DIR / "ffmpeg" / "bin" / "ffmpeg.exe",
-            ROOT_DIR / "Third-party" / "FFmpeg" / "bin" / "ffmpeg.exe",
+            RESOURCE_DIR / "ffmpeg" / "bin" / executable_name,
+            PROJECT_DIR / "ffmpeg" / "bin" / executable_name,
+            PROJECT_DIR / "Third-party" / "FFmpeg" / "bin" / executable_name,
         ):
             if local.is_file():
                 return str(local)
@@ -734,6 +747,10 @@ class VideoProcessingWindow:
         try:
             input_path = Path(self.input_dir.get()).expanduser()
             videos = self._get_video_files(input_path)
+            if input_path.is_dir():
+                videos = self._select_videos_to_process(input_path)
+                if not videos:
+                    return
             ignored_files = self._get_unsupported_files(input_path)
             tasks = self._build_tasks(videos)
         except (OSError, ValueError, KeyError) as exc:

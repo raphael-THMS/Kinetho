@@ -4,10 +4,10 @@ Kinetho est une application Windows pour préparer des vidéos, en extraire des 
 
 ## Installer Kinetho
 
-1. Téléchargez `Kinetho-<version>-Windows.zip` depuis la [dernière version publiée](https://github.com/raphael-THMS/Kinetho/releases/latest) et extrayez-le. N’utilisez pas **Code → Download ZIP** ni les archives *Source code* : elles contiennent le code source, pas l’application.
-2. Double-cliquez sur `Install Kinetho.bat`, le seul fichier visible à la racine du dossier extrait. Le dossier `setup` à côté contient les fichiers qu’il installe.
-3. Dans la fenêtre d’installation, choisissez la langue, le dossier de destination et indiquez si vous souhaitez créer un raccourci sur le Bureau. Le dossier proposé par défaut est `%LOCALAPPDATA%\Programs\Kinetho`.
-4. Cliquez sur **Installer** et attendez la fin de la copie. Kinetho ne se lance pas automatiquement.
+1. Extrayez `Kinetho-Windows.zip`.
+2. Double-cliquez sur `Install Kinetho.bat`.
+3. Dans la fenêtre d’installation, choisissez le dossier de destination et indiquez si vous souhaitez créer un raccourci sur le Bureau. Le dossier proposé par défaut est `%LOCALAPPDATA%\Programs\Kinetho`.
+4. Cliquez sur **Install** et attendez la fin de la copie. Kinetho ne se lance pas automatiquement.
 5. Lancez Kinetho avec le raccourci du Bureau, si vous l’avez choisi, ou ouvrez `Kinetho.exe` dans le dossier d’installation. Python n’a pas besoin d’être installé séparément.
 6. Choisissez **Traitement vidéo** pour préparer des vidéos ou extraire des images, ou **Annotateur de points** pour configurer et annoter des points nommés.
 
@@ -36,10 +36,6 @@ L’EXE distribué n’est pas signé. Windows SmartScreen ou les règles de sé
 - `annotations.csv` : annotations enregistrées à côté des images
 
 Les vidéos, images extraites et annotations ne sont pas incluses dans le paquet logiciel. La désinstallation les conserve.
-
-## Confidentialité
-
-Ce programme ne transmet aucune information à d’autres systèmes en réseau, sauf à la demande expresse de l’utilisateur ou de la personne qui l’installe ou l’utilise. Les vidéos, images, annotations et réglages restent sur votre ordinateur. La seule action réseau est l’ouverture de la page GitHub des problèmes dans votre navigateur quand vous cliquez sur **Signaler un bug**.
 
 ## Licence
 

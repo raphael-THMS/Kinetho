@@ -5,9 +5,10 @@ import sys
 import tkinter as tk
 
 from PIL import Image, ImageTk
+from app_paths import RESOURCE_DIR
 
 
-APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+APP_DIR = RESOURCE_DIR
 LOGO_PATH = APP_DIR / "kinetho_logo.png"
 WINDOW_ICON_PATH = APP_DIR / "kinetho_logo_white.png"
 BRAND_NAME = "Kinetho"
