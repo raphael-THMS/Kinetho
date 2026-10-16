@@ -1,5 +1,39 @@
 # Kinetho
 
+## Échelle dans l’annotateur de points
+
+Dans un dossier d’images, affichez l’image de référence puis ouvrez le menu **Échelle**
+en haut à droite et choisissez **Définir l’échelle**. Dans la même fenêtre, saisissez
+la longueur réelle (par exemple `10`, ou `10,5`) et l’unité (`cm`, `mm`, `m`...),
+puis cliquez sur les deux extrémités de l’échelle. Elles apparaissent en cyan sans modifier
+la liste des points à annoter et sans passer automatiquement à l’image suivante.
+Une seule échelle est enregistrée par dossier. **Voir l’image de référence** permet de la
+retrouver ; **Définir l’échelle** permet de la remplacer et **Supprimer l’échelle** de la retirer.
+Changer d’image ou d’outil, ou appuyer sur Suppr pendant le placement, annule un placement
+inachevé et conserve l’échelle précédente.
+
+L’échelle complète est enregistrée immédiatement dans `annotations.csv`, dans les colonnes
+`scale_image`, `scale_x1`, `scale_y1`, `scale_x2`, `scale_y2`, `scale_length`, `scale_unit`,
+`scale_pixels` et `scale_units_per_pixel`. Ces valeurs sont répétées sur chaque ligne pour
+faciliter l’exploitation du tableau. Les coordonnées correspondent aux pixels de l’image
+originale, même après zoom ou déplacement ; `scale_pixels` est la distance entre les extrémités
+et `scale_units_per_pixel` vaut longueur réelle / distance en pixels.
+Dans la fenêtre de définition, choisissez **Pixels** ou **Unité réelle saisie ci-dessus**
+pour les coordonnées de sortie `x,y`. En unité réelle, chaque coordonnée est multipliée
+par `scale_units_per_pixel` ; `x_pixel,y_pixel` conservent les pixels d’origine pour la reprise.
+`coordinate_space` indique `pixel` ou `real` et `coordinate_unit` indique `px` ou l’unité saisie.
+L’origine reste en haut à gauche, x vers la droite et y vers le bas, sans rotation des axes.
+Les extrémités `scale_x1,scale_y1,scale_x2,scale_y2` restent toujours en pixels.
+Le choix est mémorisé avec l’échelle, et remplacer ou supprimer l’échelle recalcule l’export
+à partir des pixels d’origine. Sans échelle, une confirmation à la fermeture propose de
+revenir à l’annotateur (Non) ou d’enregistrer en pixels et fermer (Oui).
+L’échelle est rechargée à la réouverture du dossier. Sans échelle,
+le CSV conserve son format à quatre colonnes ; les anciens CSV restent lisibles.
+La conversion n’est pertinente pour les autres images que si le cadrage et l’échelle
+physique restent identiques. Ouvrir puis enregistrer ce CSV avec une ancienne version de
+Kinetho pourrait supprimer les colonnes d’échelle et interpréter les unités réelles comme
+des pixels : utilisez uniquement la version mise à jour pour reprendre ces fichiers.
+
 Kinetho est une application Windows pour préparer des vidéos, en extraire des images et annoter des points sur celles-ci.
 
 ## Installer Kinetho

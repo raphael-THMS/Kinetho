@@ -1,5 +1,34 @@
 # Kinetho
 
+## Reference scale in Point Annotator
+
+Open the reference image in a folder and choose **Scale > Define scale** in the top-right
+menu. Enter the real length and unit together in one dialog (for example `10` and `cm`),
+then click its two endpoints. Cyan markers and a
+line show the scale without adding names to the annotation point list or advancing images.
+One scale is saved per folder. Use **Show scale image** to return to it, **Define scale**
+to replace it, or **Remove scale** to delete it. Switching images/tools or pressing Delete
+during placement cancels the unfinished scale and preserves the previous one.
+
+The complete scale is saved immediately in `annotations.csv`. Extra columns are
+`scale_image`, `scale_x1`, `scale_y1`, `scale_x2`, `scale_y2`, `scale_length`, `scale_unit`,
+`scale_pixels`, and `scale_units_per_pixel`, repeated on each annotation row.
+Coordinates are original-image pixels, unaffected by zoom/pan. The conversion factor is
+real length divided by pixel distance. In the scale dialog choose **Pixels** or
+**Real unit entered above** for output `x,y`. Real output multiplies each coordinate
+by `scale_units_per_pixel`; `x_pixel,y_pixel` preserve original pixels for resuming work.
+`coordinate_space` is `pixel` or `real`; `coordinate_unit` is `px` or the entered unit.
+The origin stays at the top-left, x right and y down; axes are not rotated.
+Scale endpoints always remain in pixels. The choice reloads with the scale.
+Replacing/removing the scale recalculates output from original pixels.
+Closing without a complete scale asks whether to close and save in pixels (Yes)
+or return to the annotator (No).
+Scales reload when reopening a folder; without a scale, the four-column CSV format is unchanged,
+and legacy CSV files remain supported. The conversion applies to other images only if their
+framing and physical scale match the reference. Older Kinetho versions discard the extra
+columns when saving and may interpret real units as pixels: only resume these files
+with the updated application.
+
 Kinetho is a Windows application for preparing videos, extracting frames, and annotating image points.
 
 ## Install Kinetho

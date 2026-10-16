@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import csv
+import math
 import sys
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from PIL import Image, ImageTk
 
 from branding import BRAND_BACKGROUND, BRAND_BLACK, BRAND_NAME, BRAND_RED, load_logo, load_window_icon
 from localization import load_language, translate
+from scale_calibration import SCALE_COLUMNS, ScaleCalibration
 from app_paths import WORKSPACE_DIR, points_file
 
 
@@ -45,6 +47,91 @@ POINT_COLORS = [
     "#a6761d",
     "#666666",
 ]
+
+
+class ScaleDialog(simpledialog.Dialog):
+    def __init__(
+        self, parent: tk.Misc, language: str, length: float, unit: str, export_real: bool = False,
+    ) -> None:
+        self.language = language
+        self.initial_length = length
+        self.initial_unit = unit
+        self.initial_export_real = export_real
+        self.result: tuple[float, str, bool] | None = None
+        super().__init__(parent, translate("Define scale", language))
+
+    def body(self, master: tk.Frame) -> ttk.Entry:
+        ttk.Label(
+            master, text=translate("Real length of the scale (e.g. 10):", self.language),
+        ).grid(row=0, column=0, sticky="w", padx=8, pady=(8, 4))
+        self.length_entry = ttk.Entry(master, width=24)
+        self.length_entry.insert(0, str(self.initial_length))
+        self.length_entry.grid(row=0, column=1, padx=8, pady=(8, 4))
+        ttk.Label(
+            master, text=translate("Unit (e.g. cm, mm, m):", self.language),
+        ).grid(row=1, column=0, sticky="w", padx=8, pady=4)
+        self.unit_entry = ttk.Entry(master, width=24)
+        self.unit_entry.insert(0, self.initial_unit)
+        self.unit_entry.grid(row=1, column=1, padx=8, pady=4)
+        self.export_real = tk.BooleanVar(master=self, value=self.initial_export_real)
+        ttk.Label(
+            master, text=translate("Output coordinates (x, y):", self.language),
+        ).grid(row=2, column=0, columnspan=2, sticky="w", padx=8, pady=(10, 4))
+        for row, key, value in (
+            (3, "Pixels", False),
+            (4, "Real unit entered above", True),
+        ):
+            ttk.Radiobutton(
+                master, text=translate(key, self.language), variable=self.export_real, value=value,
+            ).grid(row=row, column=0, columnspan=2, sticky="w", padx=8, pady=2)
+        ttk.Label(
+            master,
+            text=translate(
+                "Origin: top-left; x right, y down. Conversion assumes the same physical scale "
+                "in all images; perspective is not corrected. Original pixels are preserved.",
+                self.language,
+            ),
+            wraplength=420, justify="left",
+        ).grid(row=5, column=0, columnspan=2, sticky="w", padx=8, pady=(8, 4))
+        self.error_label = ttk.Label(master, foreground=BRAND_RED, wraplength=420)
+        self.error_label.grid(row=6, column=0, columnspan=2, sticky="w", padx=8, pady=4)
+        self.length_entry.selection_range(0, "end")
+        return self.length_entry
+
+    def buttonbox(self) -> None:
+        buttons = ttk.Frame(self, padding=8)
+        buttons.pack(fill="x")
+        ttk.Button(
+            buttons, text=translate("Cancel", self.language), command=self.cancel,
+        ).pack(side="right", padx=4)
+        ttk.Button(
+            buttons, text=translate("Define scale", self.language), command=self.ok,
+        ).pack(side="right", padx=4)
+        self.bind("<Return>", self.ok)
+        self.bind("<Escape>", self.cancel)
+
+    def validate(self) -> bool:
+        try:
+            length = float(self.length_entry.get().strip().replace(",", "."))
+            if not math.isfinite(length) or length <= 0:
+                raise ValueError
+        except ValueError:
+            self.error_label.configure(text=translate("Enter a finite length greater than zero.", self.language))
+            self.length_entry.focus_set()
+            return False
+        if not self.unit_entry.get().strip():
+            self.error_label.configure(text=translate("Enter a unit for the scale.", self.language))
+            self.unit_entry.focus_set()
+            return False
+        self.error_label.configure(text="")
+        return True
+
+    def apply(self) -> None:
+        self.result = (
+            float(self.length_entry.get().strip().replace(",", ".")),
+            self.unit_entry.get().strip(),
+            self.export_real.get(),
+        )
 
 
 class PointAnnotator:
@@ -87,6 +174,11 @@ class PointAnnotator:
         self.zoom_quality_id: str | None = None
         self.active_point_drag: str | None = None
         self.advance_after_point_drag = False
+        self.calibration: ScaleCalibration | None = None
+        self.scale_start: tuple[float, float] | None = None
+        self.scale_length = 1.0
+        self.scale_unit = "cm"
+        self.scale_export_real = False
 
         self._build_interface()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -138,6 +230,20 @@ class PointAnnotator:
         ).pack(side="left")
         self.folder_label = ttk.Label(toolbar, text=translate("No folder open", self.language), anchor="w")
         self.folder_label.pack(side="left", fill="x", expand=True, padx=(12, 0))
+        self.scale_button = ttk.Menubutton(toolbar, text=translate("Scale", self.language))
+        self.scale_menu = tk.Menu(self.scale_button, tearoff=False)
+        self.scale_button.configure(menu=self.scale_menu)
+        self.scale_menu.add_command(label=translate("No scale defined", self.language), state="disabled")
+        self.scale_menu.add_separator()
+        for label, command in (
+            ("Define scale", self.define_scale),
+            ("Show scale image", self.show_scale_image),
+            ("Remove scale", self.remove_scale),
+        ):
+            self.scale_menu.add_command(label=translate(label, self.language), command=command)
+        self.scale_button.pack(side="right", padx=(8, 0))
+        self.scale_hint = ttk.Label(self.root, foreground=BRAND_RED, padding=(10, 2))
+        self.update_scale_status()
 
         content = ttk.Frame(self.root, padding=(10, 0, 10, 8))
         content.pack(side="top", fill="both", expand=True)
@@ -289,14 +395,20 @@ class PointAnnotator:
             )
             return
 
-        if self.current_folder is not None:
-            self.save_annotations()
+        if self.current_folder is not None and not self.save_annotations():
+            return
 
+        previous = (self.current_folder, self.image_paths, self.current_index, self.annotations, self.calibration)
         self.current_folder = folder
         self.image_paths = paths
         self.current_index = 0
         self.annotations = {path.name: {name: None for name in self.point_names} for path in paths}
-        self.load_annotations()
+        self.calibration = None
+        if not self.load_annotations():
+            self.current_folder, self.image_paths, self.current_index, self.annotations, self.calibration = previous
+            return
+        self._cancel_scale_placement()
+        self.update_scale_status()
         self.folder_label.configure(text=str(folder))
         self.show_current_image()
 
@@ -306,49 +418,179 @@ class PointAnnotator:
             return None
         return self.current_folder / "annotations.csv"
 
-    def load_annotations(self) -> None:
+    def load_annotations(self) -> bool:
         csv_path = self.csv_path
         if csv_path is None or not csv_path.exists():
-            return
+            return True
         try:
+            scale_seen = False
             with csv_path.open("r", newline="", encoding="utf-8-sig") as csv_file:
                 for row in csv.DictReader(csv_file):
+                    calibration = ScaleCalibration.from_csv(row)
+                    if scale_seen and calibration != self.calibration:
+                        raise ValueError(translate("Inconsistent scale data in annotations.csv.", self.language))
+                    self.calibration = calibration
+                    scale_seen = True
                     image_name = row.get("image", "")
                     point_name = row.get("point", "")
                     if image_name not in self.annotations or point_name not in self.point_names:
                         continue
-                    x_value, y_value = row.get("x", ""), row.get("y", "")
+                    if calibration is not None and calibration.export_real:
+                        if "x_pixel" not in row or "y_pixel" not in row:
+                            raise ValueError(translate("Original pixel coordinates are missing.", self.language))
+                        x_value, y_value = row.get("x_pixel", ""), row.get("y_pixel", "")
+                        if (row.get("x") or row.get("y")) and not (x_value and y_value):
+                            raise ValueError(translate("Original pixel coordinates are missing.", self.language))
+                    else:
+                        x_value, y_value = row.get("x", ""), row.get("y", "")
                     if x_value and y_value:
                         self.annotations[image_name][point_name] = (float(x_value), float(y_value))
+            if self.calibration is not None and self.calibration.image not in self.annotations:
+                raise ValueError(translate("The scale reference image is missing from this folder.", self.language))
         except (OSError, ValueError, csv.Error) as exc:
             messagebox.showerror(
                 translate("Read error", self.language),
                 translate("Could not read {path}:\n{error}", self.language).format(path=csv_path, error=exc),
             )
+            return False
+        return True
 
-    def save_annotations(self) -> None:
+    def save_annotations(self) -> bool:
         csv_path = self.csv_path
         if csv_path is None:
-            return
+            return True
         temporary_path = csv_path.with_suffix(".csv.tmp")
         try:
             with temporary_path.open("w", newline="", encoding="utf-8-sig") as csv_file:
                 writer = csv.writer(csv_file)
-                writer.writerow(["image", "point", "x", "y"])
+                scale_values = list(self.calibration.to_csv().values()) if self.calibration is not None else []
+                convert = self.calibration is not None and self.calibration.export_real
+                factor = (
+                    self.calibration.length / self.calibration.pixels
+                    if self.calibration is not None and self.calibration.export_real else 1.0
+                )
+                writer.writerow([
+                    "image", "point", "x", "y", *(SCALE_COLUMNS if scale_values else ()),
+                    *(("x_pixel", "y_pixel") if convert else ()),
+                ])
                 for image_path in self.image_paths:
                     for point_name in self.point_names:
                         coordinate = self.annotations[image_path.name][point_name]
-                        writer.writerow(
-                            [image_path.name, point_name, coordinate[0], coordinate[1]]
+                        row = (
+                            [image_path.name, point_name, coordinate[0] * factor, coordinate[1] * factor]
                             if coordinate is not None
                             else [image_path.name, point_name, "", ""]
                         )
+                        pixels = list(coordinate) if coordinate is not None else ["", ""]
+                        writer.writerow(row + scale_values + (pixels if convert else []))
             temporary_path.replace(csv_path)
         except OSError as exc:
             messagebox.showerror(
                 translate("Save error", self.language),
                 translate("Could not write {path}:\n{error}", self.language).format(path=csv_path, error=exc),
             )
+            return False
+        return True
+
+    def define_scale(self) -> None:
+        if self.image is None:
+            messagebox.showinfo(
+                translate("Scale", self.language), translate("Open an image folder first.", self.language),
+            )
+            return
+        dialog = ScaleDialog(
+            self.root, self.language,
+            self.calibration.length if self.calibration else self.scale_length,
+            self.calibration.unit if self.calibration else self.scale_unit,
+            self.calibration.export_real if self.calibration else self.scale_export_real,
+        )
+        if dialog.result is None:
+            return
+        self.scale_length, self.scale_unit, self.scale_export_real = dialog.result
+        self.scale_start = None
+        self.tool_mode.set("scale")
+        self._update_canvas_tool()
+        self.redraw()
+        self.update_scale_status()
+
+    def _cancel_scale_placement(self) -> None:
+        self.scale_start = None
+        if self.tool_mode.get() == "scale":
+            self.tool_mode.set("point")
+            self._update_canvas_tool()
+
+    def update_scale_status(self) -> None:
+        if self.tool_mode.get() == "scale":
+            key = "Click the first scale endpoint." if self.scale_start is None else "Click the second scale endpoint."
+            text = translate(key, self.language)
+        elif self.calibration is None:
+            text = translate("No scale defined", self.language)
+        else:
+            text = translate("{length} {unit} on {image}", self.language).format(
+                length=self.calibration.length, unit=self.calibration.unit, image=self.calibration.image,
+            )
+            text += " | " + translate("Output: {unit}", self.language).format(
+                unit=self.calibration.unit if self.calibration.export_real else "px",
+            )
+        self.scale_menu.entryconfigure(0, label=text)
+        for index in (3, 4):
+            self.scale_menu.entryconfigure(index, state="normal" if self.calibration is not None else "disabled")
+        if self.tool_mode.get() == "scale":
+            self.scale_hint.configure(text=text)
+            self.scale_hint.pack(side="top", fill="x", after=self.scale_button.master)
+        else:
+            self.scale_hint.pack_forget()
+
+    def show_scale_image(self) -> None:
+        if self.calibration is None:
+            return
+        if not self.save_annotations():
+            return
+        self.current_index = next(
+            index for index, path in enumerate(self.image_paths) if path.name == self.calibration.image
+        )
+        self.show_current_image()
+
+    def remove_scale(self) -> None:
+        if self.calibration is not None:
+            if not messagebox.askyesno(
+                translate("Scale", self.language), translate("Remove this folder's scale?", self.language),
+            ):
+                return
+            previous = self.calibration
+            self.calibration = None
+            if not self.save_annotations():
+                self.calibration = previous
+        self._cancel_scale_placement()
+        self.update_scale_status()
+        self.redraw()
+
+    def _place_scale_endpoint(self, screen_x: float, screen_y: float) -> None:
+        if self.image is None:
+            return
+        coordinate = self.screen_to_image(screen_x, screen_y)
+        if self.scale_start is None:
+            self.scale_start = coordinate
+        else:
+            try:
+                calibration = ScaleCalibration(
+                    self.current_image_name(), self.scale_start, coordinate, self.scale_length, self.scale_unit,
+                    self.scale_export_real,
+                )
+            except ValueError:
+                messagebox.showerror(
+                    translate("Scale", self.language),
+                    translate("Choose distinct endpoints and a valid scale length.", self.language),
+                )
+                return
+            previous = self.calibration
+            self.calibration = calibration
+            if not self.save_annotations():
+                self.calibration = previous
+                return
+            self._cancel_scale_placement()
+        self.update_scale_status()
+        self.redraw()
 
     def current_image_name(self) -> str:
         return self.image_paths[self.current_index].name
@@ -356,6 +598,8 @@ class PointAnnotator:
     def show_current_image(self) -> None:
         if not self.image_paths:
             return
+        self._cancel_scale_placement()
+        self.update_scale_status()
         image_path = self.image_paths[self.current_index]
         try:
             with Image.open(image_path) as source:
@@ -430,11 +674,33 @@ class PointAnnotator:
             label_id = self.canvas.find_all()[-1]
             self.canvas.addtag_withtag(f"point-label-{point_index}", label_id)
 
+        scale_points = []
+        if self.calibration is not None and self.calibration.image == self.current_image_name():
+            scale_points = [self.calibration.start, self.calibration.end]
+        if self.tool_mode.get() == "scale":
+            scale_points = [self.scale_start] if self.scale_start is not None else []
+        screen_points = [self.image_to_screen(*coordinate) for coordinate in scale_points]
+        if len(screen_points) == 2:
+            self.canvas.create_line(*screen_points[0], *screen_points[1], fill="#00ffff", width=3, tags=("view",))
+        for index, (x, y) in enumerate(screen_points, 1):
+            self.canvas.create_rectangle(x - 6, y - 6, x + 6, y + 6, outline="#00ffff", width=3, tags=("view",))
+            self.canvas.create_text(
+                x + 10, y + 10, text=f"{translate('Scale', self.language)} {index}",
+                fill="#00ffff", anchor="nw", tags=("view",),
+            )
+
     def image_to_screen(self, x: float, y: float) -> tuple[float, float]:
         return (
             self.display_offset[0] + x * self.display_scale,
             self.display_offset[1] + y * self.display_scale,
         )
+
+    def screen_to_image(self, x: float, y: float) -> tuple[float, float]:
+        if self.image is None:
+            raise ValueError("No image is open.")
+        image_x = min(max((x - self.display_offset[0]) / self.display_scale, 0), self.image.width - 1)
+        image_y = min(max((y - self.display_offset[1]) / self.display_scale, 0), self.image.height - 1)
+        return round(image_x, 2), round(image_y, 2)
 
     def _scroll_point_list(self, event: tk.Event) -> str:
         if getattr(event, "delta", 0):
@@ -446,7 +712,13 @@ class PointAnnotator:
 
     def _update_canvas_tool(self) -> None:
         self.pan_start = None
+        self.active_point_drag = None
+        self.advance_after_point_drag = False
+        if self.tool_mode.get() != "scale":
+            self.scale_start = None
         self.canvas.configure(cursor="fleur" if self.tool_mode.get() == "pan" else "crosshair")
+        self.update_scale_status()
+        self.redraw()
 
     def _cancel_zoom_redraws(self) -> None:
         if self.zoom_preview_id is not None:
@@ -555,9 +827,7 @@ class PointAnnotator:
     def _move_active_point(self, screen_x: float, screen_y: float) -> None:
         if self.image is None or self.active_point_drag is None:
             return
-        image_x = min(max((screen_x - self.display_offset[0]) / self.display_scale, 0), self.image.width - 1)
-        image_y = min(max((screen_y - self.display_offset[1]) / self.display_scale, 0), self.image.height - 1)
-        coordinate = (round(image_x, 2), round(image_y, 2))
+        coordinate = self.screen_to_image(screen_x, screen_y)
         self.annotations[self.current_image_name()][self.active_point_drag] = coordinate
         point_index = self.point_names.index(self.active_point_drag)
         marker_x, marker_y = self.image_to_screen(*coordinate)
@@ -583,6 +853,9 @@ class PointAnnotator:
         shown_width, shown_height = self.display_size
         if not (offset_x <= event.x <= offset_x + shown_width and offset_y <= event.y <= offset_y + shown_height):
             return
+        if self.tool_mode.get() == "scale":
+            self._place_scale_endpoint(event.x, event.y)
+            return
         selection = self.point_list.curselection()
         if not selection:
             return
@@ -601,6 +874,11 @@ class PointAnnotator:
         self.point_list.see(index)
 
     def delete_selected_point(self) -> None:
+        if self.tool_mode.get() == "scale":
+            self._cancel_scale_placement()
+            self.update_scale_status()
+            self.redraw()
+            return
         selection = self.point_list.curselection()
         if not selection or not self.image_paths:
             return
@@ -612,14 +890,16 @@ class PointAnnotator:
     def previous_image(self) -> None:
         if self.current_index <= 0:
             return
-        self.save_annotations()
+        if not self.save_annotations():
+            return
         self.current_index -= 1
         self.show_current_image()
 
     def next_image(self) -> None:
         if not self.image_paths:
             return
-        self.save_annotations()
+        if not self.save_annotations():
+            return
         if self.current_index >= len(self.image_paths) - 1:
             return
         self.current_index += 1
@@ -650,7 +930,20 @@ class PointAnnotator:
         self.next_button.configure(state="normal" if self.current_index < len(self.image_paths) - 1 else "disabled")
 
     def close(self) -> None:
-        self.save_annotations()
+        if self.image_paths and self.calibration is None:
+            if not messagebox.askyesno(
+                translate("Close without a scale?", self.language),
+                translate(
+                    "No complete scale is defined for this folder. The x and y coordinates in "
+                    "annotations.csv will be saved in pixels, not in real units.\n\n"
+                    "Close anyway?\nChoose No to return to the annotator and use Scale > Define scale.",
+                    self.language,
+                ),
+                parent=self.root, icon="warning", default=messagebox.NO,
+            ):
+                return
+        if not self.save_annotations():
+            return
         self.root.destroy()
 
 
