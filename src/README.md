@@ -8,7 +8,7 @@ This folder contains the application source code. End users should install Kinet
 
 1. On the Kinetho home page, choose **Video Processing** to prepare videos and extract frames, or choose **Point Annotator** to start annotating.
 2. In Point Annotator's configuration page, add, rename, remove, or reorder point names, then click **Save and Continue**. Kinetho saves the list to `points.txt`.
-3. Click **Open image folder** and select the relevant image folder. Extracted frames are saved under `Image folders`, one subfolder per source video.
+3. Click **Open image folder** and select the relevant image folder. Extracted frames are saved in the output folder you chose, one subfolder per source video. Kinetho remembers the last folders you used.
 4. Select a point from the list on the left, then click the image to place it. By default, the application advances to the next image after each placement and keeps the same point selected. Uncheck **Advance after placing a point** to annotate multiple points on the same image.
 5. Use **Previous image** and **Next image**, or the left/right arrow keys, to navigate. Annotations are saved automatically when changing images and when closing the application.
 

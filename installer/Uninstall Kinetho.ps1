@@ -9,7 +9,10 @@ $ErrorActionPreference = 'Stop'
 
 $language = if ((Get-UICulture).TwoLetterISOLanguageName -eq 'fr') { 'fr' } else { 'en' }
 try {
-    $settingsFile = Join-Path $InstallRoot 'kinetho_settings.json'
+    $settingsFile = Join-Path $InstallRoot 'data\kinetho_settings.json'
+    if (-not (Test-Path -LiteralPath $settingsFile)) {
+        $settingsFile = Join-Path $InstallRoot 'kinetho_settings.json'
+    }
     if ($InstallRoot -and (Test-Path -LiteralPath $settingsFile)) {
         $savedLanguage = (Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json).language
         if ($savedLanguage -in @('en', 'fr')) { $language = $savedLanguage }
@@ -22,14 +25,14 @@ $messages = @{
         NoFolder     = 'The Kinetho installation folder was not provided.'
         StillOpen    = 'Another Kinetho window is still open. Close it and run the uninstaller again.'
         DoneTitle    = 'Kinetho Uninstalled'
-        Done         = "Kinetho and its bundled FFmpeg dependency have been removed.`r`n`r`nYour point configuration, videos, extracted images, and annotations were kept in:`r`n{0}"
+        Done         = "Kinetho and its bundled FFmpeg dependency have been removed.`r`n`r`nYour point configuration was kept in:`r`n{0}`r`n`r`nVideos, extracted images, and annotations in the folders you chose were not modified."
         FailedTitle  = 'Kinetho Uninstall Failed'
     }
     fr = @{
         NoFolder     = "Le dossier d'installation de Kinetho n'a pas été indiqué."
         StillOpen    = 'Une autre fenêtre Kinetho est encore ouverte. Fermez-la, puis relancez la désinstallation.'
         DoneTitle    = 'Kinetho désinstallé'
-        Done         = "Kinetho et FFmpeg ont été supprimés.`r`n`r`nVotre configuration des points, vos vidéos, les images extraites et les annotations ont été conservées dans :`r`n{0}"
+        Done         = "Kinetho et FFmpeg ont été supprimés.`r`n`r`nVotre configuration des points a été conservée dans :`r`n{0}`r`n`r`nLes vidéos, images extraites et annotations des dossiers que vous avez choisis n'ont pas été modifiées."
         FailedTitle  = 'Échec de la désinstallation de Kinetho'
     }
 }[$language]
@@ -80,7 +83,7 @@ try {
             Remove-Item -LiteralPath $file -Force
         }
     }
-    foreach ($directoryName in @('ffmpeg', '_internal')) {
+    foreach ($directoryName in @('ffmpeg', '_internal', 'docs')) {
         $appDirectory = Join-Path $InstallRoot $directoryName
         if (Test-Path -LiteralPath $appDirectory) {
             Remove-Item -LiteralPath $appDirectory -Recurse -Force

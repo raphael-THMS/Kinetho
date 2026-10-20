@@ -25,6 +25,8 @@ Third-party/FFmpeg/bin/
 Third-party/FFmpeg/source/
 Third-party/FFmpeg-Mac/bin/
 Third-party/FFmpeg-Mac/source/
+Third-party/FFmpeg-Mac/*/bin/
+Third-party/FFmpeg-Mac/*/source/
 *.tar.xz
 *.tar.xz.asc
 

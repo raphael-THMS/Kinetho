@@ -23,15 +23,15 @@ from branding import (
 )
 from localization import LANGUAGES, load_language, save_language, translate
 from video_processing import VideoProcessingWindow
-from app_paths import IS_MAC, PROJECT_DIR, points_file
+from app_paths import IS_MAC, PROJECT_DIR, DOCUMENTATION_DIR, RESOURCE_DIR, points_file
 
 
 FROZEN = getattr(sys, "frozen", False)
 APP_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
 ROOT_DIR = PROJECT_DIR
-README_PATH = ROOT_DIR / ("README-Mac.md" if IS_MAC else "README.md")
-README_FR_PATH = ROOT_DIR / ("README-Mac.md" if IS_MAC else "README-fr.md")
-UNINSTALL_SCRIPT = APP_DIR / "Uninstall Kinetho.ps1"
+README_PATH = DOCUMENTATION_DIR / ("README-Mac.md" if IS_MAC else "README.md")
+README_FR_PATH = DOCUMENTATION_DIR / ("README-Mac.md" if IS_MAC else "README-fr.md")
+UNINSTALL_SCRIPT = RESOURCE_DIR / "Uninstall Kinetho.ps1"
 BUG_REPORT_URL = "https://github.com/raphael-THMS/Kinetho/issues"
 ENTRY_SCRIPT = APP_DIR / "kinetho_app.py"
 POINTS_FILE = points_file()

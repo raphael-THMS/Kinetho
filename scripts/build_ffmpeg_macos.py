@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import lzma
 import os
-import platform
 import shutil
 import subprocess
 import sys
@@ -39,29 +38,34 @@ def archive_source(folder: Path, destination: Path) -> None:
 
 
 def main() -> None:
-    if sys.platform != "darwin" or platform.machine() != "arm64":
-        raise ValueError("Build FFmpeg on a native Apple Silicon macOS machine.")
-    for tool in ("git", "make", "clang", "pkg-config"):
+    from macos import build_target, validate_ffmpeg
+
+    architecture, minimum = build_target()
+    tools = ["git", "make", "clang", "pkg-config"]
+    if architecture == "x86_64":
+        tools.append("nasm")
+    for tool in tools:
         if shutil.which(tool) is None:
             raise ValueError(f"Missing build tool: {tool}")
-    work = ROOT / ".build-mac" / "ffmpeg-source"
+    work = ROOT / ".build-mac" / architecture / "ffmpeg-source"
     prefix = work / "prefix"
-    output = ROOT / "Third-party" / "FFmpeg-Mac"
+    output = ROOT / "Third-party" / "FFmpeg-Mac" / architecture
     prefix.mkdir(parents=True, exist_ok=True)
     (output / "bin").mkdir(parents=True, exist_ok=True)
     (output / "source").mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
-    environment["MACOSX_DEPLOYMENT_TARGET"] = "14.0"
+    environment["MACOSX_DEPLOYMENT_TARGET"] = minimum
     environment["PKG_CONFIG_LIBDIR"] = str(prefix / "lib" / "pkgconfig")
     environment["PKG_CONFIG_PATH"] = str(prefix / "lib" / "pkgconfig")
-    compiler_flags = "-arch arm64 -mmacosx-version-min=14.0"
+    compiler_flags = f"-arch {architecture} -mmacosx-version-min={minimum}"
+    configure_arch = "aarch64" if architecture == "arm64" else "x86_64"
     x264 = work / "x264"
     ffmpeg = work / "ffmpeg"
     checkout("https://github.com/mirror/x264.git", X264_COMMIT, x264, environment)
     checkout("https://github.com/FFmpeg/FFmpeg.git", FFMPEG_COMMIT, ffmpeg, environment)
     jobs = str(min(os.cpu_count() or 2, 4))
     x264_options = [
-        "./configure", f"--prefix={prefix}", "--host=aarch64-apple-darwin",
+        "./configure", f"--prefix={prefix}", f"--host={configure_arch}-apple-darwin",
         "--enable-static", "--disable-cli", "--disable-opencl", "--enable-pic",
         f"--extra-cflags={compiler_flags}", f"--extra-ldflags={compiler_flags}",
     ]
@@ -69,7 +73,7 @@ def main() -> None:
     run(["make", f"-j{jobs}"], x264, environment)
     run(["make", "install"], x264, environment)
     ffmpeg_options = [
-        "./configure", f"--prefix={prefix}", "--arch=aarch64", "--target-os=darwin", "--cc=clang",
+        "./configure", f"--prefix={prefix}", f"--arch={configure_arch}", "--target-os=darwin", "--cc=clang",
         "--disable-autodetect", "--enable-gpl", "--enable-version3", "--enable-libx264", "--enable-zlib",
         "--enable-static", "--disable-shared", "--disable-ffplay", "--disable-ffprobe",
         "--disable-doc", "--disable-debug", "--disable-network", "--pkg-config-flags=--static",
@@ -93,14 +97,12 @@ def main() -> None:
     build_info = (
         f"FFmpeg {FFMPEG_VERSION}: https://github.com/FFmpeg/FFmpeg/tree/{FFMPEG_COMMIT}\n"
         f"x264: https://github.com/mirror/x264/tree/{X264_COMMIT}\n"
-        "Architecture: ARM64. Build target: macOS 14.0 (application compatibility must be tested).\n"
+        f"Architecture: {architecture}. Build target: macOS {minimum} (application compatibility must be tested).\n"
         "Build recipe: scripts/build_ffmpeg_macos.py in the Kinetho repository.\n"
         f"x264 configuration: {x264_options!r}\nFFmpeg configuration: {ffmpeg_options!r}\n"
     )
     (output / "README.txt").write_text(build_info, encoding="utf-8")
     shutil.copy2(Path(__file__), output / "source" / "build_ffmpeg_macos.py")
-    from macos import validate_ffmpeg
-
     validate_ffmpeg(output)
     print(f"Standalone FFmpeg with sources and licenses prepared: {output}")
 

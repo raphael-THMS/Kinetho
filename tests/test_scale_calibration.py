@@ -57,6 +57,9 @@ class AnnotatorScaleTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.folder = Path(self.temp.name)
+        settings_patch = patch("localization.settings_directory", return_value=self.folder)
+        settings_patch.start()
+        self.addCleanup(settings_patch.stop)
         for name in ("a.png", "b.png"):
             Image.new("RGB", (200, 100), "white").save(self.folder / name)
         self.window = tk.Toplevel(self.root)

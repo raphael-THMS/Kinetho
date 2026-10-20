@@ -12,16 +12,12 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from branding import BRAND_BACKGROUND, BRAND_BLACK, BRAND_MUTED, BRAND_NAME, BRAND_RED, load_logo, load_window_icon
-from localization import english_text, translate
-from app_paths import RESOURCE_DIR, PROJECT_DIR, WORKSPACE_DIR
+from localization import english_text, remember_path, remembered_path, translate
+from app_paths import RESOURCE_DIR, PROJECT_DIR
 
 
 FROZEN = getattr(sys, "frozen", False)
 APP_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
-ROOT_DIR = WORKSPACE_DIR
-RAW_VIDEO_DIR = ROOT_DIR / "Video edition" / "Videos_before_modifications"
-PROCESSED_VIDEO_DIR = ROOT_DIR / "Videos"
-IMAGE_OUTPUT_DIR = ROOT_DIR / "Image folders"
 VIDEO_EXTENSIONS = {
     ".3gp",
     ".asf",
@@ -123,8 +119,9 @@ class VideoProcessingWindow:
             self.window.iconphoto(True, self.window_icon)
 
         self.operation = tk.StringVar(value=translate("Extract frames", self.language))
-        self.input_dir = tk.StringVar(value=str(RAW_VIDEO_DIR))
-        self.output_dir = tk.StringVar(value=str(PROCESSED_VIDEO_DIR))
+        remembered_input = remembered_path("video_input")
+        self.input_dir = tk.StringVar(value=str(remembered_input) if remembered_input is not None else "")
+        self.output_dir = tk.StringVar(value="")
         self.parameter_vars: dict[str, tk.StringVar] = {}
         self.active_process: subprocess.Popen[str] | None = None
         self.worker: threading.Thread | None = None
@@ -266,9 +263,24 @@ class VideoProcessingWindow:
         )
         parent.columnconfigure(1, weight=1)
 
+    @staticmethod
+    def _initial_folder(*candidates: str | Path | None) -> Path:
+        for candidate in candidates:
+            if candidate is None or not str(candidate).strip():
+                continue
+            path = Path(candidate).expanduser()
+            if path.is_file():
+                path = path.parent
+            if path.is_dir():
+                return path
+        return Path.home()
+
+    def _output_setting_key(self) -> str:
+        operation_label = english_text(self.operation.get(), self.language)
+        return "frames_output" if operation_label == "Extract frames" else "video_output"
+
     def _choose_input_folder(self) -> None:
-        current = Path(self.input_dir.get()).expanduser()
-        initial = current if current.is_dir() else current.parent
+        initial = self._initial_folder(self.input_dir.get(), remembered_path("video_input"))
         selected = filedialog.askdirectory(
             parent=self.window,
             title=translate("Choose the input video folder", self.language),
@@ -276,19 +288,20 @@ class VideoProcessingWindow:
         )
         if selected:
             self.input_dir.set(selected)
+            remember_path("video_input", selected)
 
     def _choose_input_video(self) -> None:
-        current = Path(self.input_dir.get()).expanduser()
-        initial = current.parent if current.is_file() else current
+        initial = self._initial_folder(self.input_dir.get(), remembered_path("video_input"))
         patterns = " ".join(f"*{extension}" for extension in sorted(VIDEO_EXTENSIONS))
         selected = filedialog.askopenfilename(
             parent=self.window,
             title=translate("Choose a video to process", self.language),
-            initialdir=initial if initial.is_dir() else None,
+            initialdir=initial,
             filetypes=(("Video files", patterns), ("All files", "*.*")),
         )
         if selected:
             self.input_dir.set(selected)
+            remember_path("video_input", selected)
 
     def _select_videos_to_process(self, input_path: Path) -> list[Path]:
         patterns = " ".join(f"*{extension}" for extension in sorted(VIDEO_EXTENSIONS))
@@ -301,8 +314,8 @@ class VideoProcessingWindow:
         return [Path(path) for path in selected]
 
     def _choose_output(self) -> None:
-        operation_label = english_text(self.operation.get(), self.language)
-        initial = IMAGE_OUTPUT_DIR if operation_label == "Extract frames" else PROCESSED_VIDEO_DIR
+        key = self._output_setting_key()
+        initial = self._initial_folder(self.output_dir.get(), remembered_path(key), self.input_dir.get())
         selected = filedialog.askdirectory(
             parent=self.window,
             title=translate("Choose the output folder", self.language),
@@ -310,6 +323,7 @@ class VideoProcessingWindow:
         )
         if selected:
             self.output_dir.set(selected)
+            remember_path(key, selected)
 
     def _on_operation_selected(self, _event: tk.Event | None = None) -> None:
         operation_label = english_text(self.operation.get(), self.language)
@@ -375,7 +389,8 @@ class VideoProcessingWindow:
         elif operation == "repair":
             self._add_choice("Repair mode", "repair_mode", ("Fast (remux)", "Safe (re-encode)"), 0)
 
-        self.output_dir.set(str(IMAGE_OUTPUT_DIR if operation == "extract" else PROCESSED_VIDEO_DIR))
+        remembered_output = remembered_path("frames_output" if operation == "extract" else "video_output")
+        self.output_dir.set(str(remembered_output) if remembered_output is not None and remembered_output.is_dir() else "")
 
     def show_operation_help(self) -> None:
         operation_label = english_text(self.operation.get(), self.language)
@@ -498,9 +513,9 @@ class VideoProcessingWindow:
 
     def _build_tasks(self, videos: list[Path]) -> list[tuple[str, list[str]]]:
         operation = OPERATIONS[english_text(self.operation.get(), self.language)]
+        if not self.output_dir.get().strip():
+            raise ValueError("Choose an output folder.")
         output_dir = Path(self.output_dir.get()).expanduser()
-        if operation == "extract":
-            output_dir = IMAGE_OUTPUT_DIR if not self.output_dir.get().strip() else output_dir
         output_dir.mkdir(parents=True, exist_ok=True)
         tasks: list[tuple[str, list[str]]] = []
         ffmpeg = self._find_ffmpeg()
@@ -745,6 +760,8 @@ class VideoProcessingWindow:
         if self.worker is not None and self.worker.is_alive():
             return
         try:
+            if not self.input_dir.get().strip():
+                raise ValueError("Choose a video or a folder of videos to process.")
             input_path = Path(self.input_dir.get()).expanduser()
             videos = self._get_video_files(input_path)
             if input_path.is_dir():
@@ -760,6 +777,8 @@ class VideoProcessingWindow:
                 parent=self.window,
             )
             return
+        remember_path("video_input", input_path)
+        remember_path(self._output_setting_key(), self.output_dir.get())
         self.cancel_requested = False
         self.progress.configure(mode="determinate", maximum=max(1, len(tasks)), value=0)
         self.start_button.configure(state="disabled")

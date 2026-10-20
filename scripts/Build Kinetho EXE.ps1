@@ -101,24 +101,22 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCOD
 Move-Item -LiteralPath (Join-Path $distRoot 'Kinetho') -Destination $appOutput
 
 $runtimeFiles = @(
-    @{ Source = $iconFile; Destination = 'Kinetho.ico' },
-    @{ Source = (Join-Path $appSource 'kinetho_logo.png'); Destination = 'kinetho_logo.png' },
-    @{ Source = (Join-Path $appSource 'kinetho_logo_white.png'); Destination = 'kinetho_logo_white.png' },
-    @{ Source = (Join-Path $appSource 'points.txt'); Destination = 'points.txt' },
-    @{ Source = (Join-Path $projectRoot 'README.md'); Destination = 'README.md' },
-    @{ Source = (Join-Path $projectRoot 'README-fr.md'); Destination = 'README-fr.md' },
-    @{ Source = (Join-Path $projectRoot 'LICENSE'); Destination = 'LICENSE' },
-    @{ Source = (Join-Path $installerSource 'Uninstall Kinetho.ps1'); Destination = 'Uninstall Kinetho.ps1' }
+    @{ Source = $iconFile; Destination = '_internal\Kinetho.ico' },
+    @{ Source = (Join-Path $appSource 'kinetho_logo.png'); Destination = '_internal\kinetho_logo.png' },
+    @{ Source = (Join-Path $appSource 'kinetho_logo_white.png'); Destination = '_internal\kinetho_logo_white.png' },
+    @{ Source = (Join-Path $appSource 'points.txt'); Destination = '_internal\points.txt' },
+    @{ Source = (Join-Path $appSource 'points.txt'); Destination = 'data\points.txt' },
+    @{ Source = (Join-Path $installerSource 'Portable README.md'); Destination = 'README.md' },
+    @{ Source = (Join-Path $projectRoot 'README.md'); Destination = 'docs\README.md' },
+    @{ Source = (Join-Path $projectRoot 'README-fr.md'); Destination = 'docs\README-fr.md' },
+    @{ Source = (Join-Path $projectRoot 'LICENSE'); Destination = 'docs\LICENSE' },
+    @{ Source = (Join-Path $installerSource 'Uninstall Kinetho.ps1'); Destination = '_internal\Uninstall Kinetho.ps1' }
 )
 foreach ($item in $runtimeFiles) {
-    Copy-Item -LiteralPath $item.Source -Destination (Join-Path $appOutput $item.Destination) -Force
+    $target = Join-Path $appOutput $item.Destination
+    New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+    Copy-Item -LiteralPath $item.Source -Destination $target -Force
 }
-$rawVideoFolder = Join-Path $appOutput 'Video edition\Videos_before_modifications'
-New-Item -ItemType Directory -Path $rawVideoFolder, (Join-Path $appOutput 'Videos'), (Join-Path $appOutput 'Image folders') -Force | Out-Null
-Set-Content -LiteralPath (Join-Path $rawVideoFolder 'README.md') -Encoding UTF8 -Value @(
-    'Place source videos in this folder before opening Kinetho.',
-    'Placez les vidéos source dans ce dossier avant d''ouvrir Kinetho.'
-)
 
 Write-Host "Kinetho $appVersion built successfully: $(Join-Path $appOutput 'Kinetho.exe')"
 Write-Host 'Kinetho.exe and its _internal folder include Python, Tkinter, and Pillow. Run Create Portable Package.ps1 to bundle FFmpeg.'

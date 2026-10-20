@@ -202,6 +202,8 @@ FRENCH = {
     "Skipping {count} file(s) with unsupported extensions: {names}": "Ignorer {count} fichier(s) ayant des extensions non prises en charge : {names}",
     "A video that cannot be decoded will be marked as failed; other videos will continue.": "Une vidéo illisible sera signalée comme échec ; le traitement des autres vidéos continuera.",
     "Cannot start processing": "Impossible de démarrer le traitement",
+    "Choose an output folder.": "Choisissez un dossier de sortie.",
+    "Choose a video or a folder of videos to process.": "Choisissez une vidéo ou un dossier de vidéos à traiter.",
     "Processing: {name}": "Traitement : {name}",
     "FAILED ({code}): {name}": "ÉCHEC ({code}) : {name}",
     "ERROR: {error}": "ERREUR : {error}",
@@ -247,23 +249,67 @@ _DYNAMIC_FRENCH = (
 )
 
 
-def load_language() -> str:
-    settings_file = settings_directory() / "kinetho_settings.json"
+SETTINGS_FILE_NAME = "kinetho_settings.json"
+REMEMBERED_FOLDER_KEYS = ("video_input", "video_output", "frames_output", "annotation_folder")
+
+
+def load_settings() -> dict[str, object]:
+    settings_file = settings_directory() / SETTINGS_FILE_NAME
     try:
         settings = json.loads(settings_file.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return "en"
-    language = settings.get("language", "en")
+        return {}
+    return settings if isinstance(settings, dict) else {}
+
+
+def _write_settings(settings: dict[str, object]) -> None:
+    settings_file = settings_directory() / SETTINGS_FILE_NAME
+    settings_file.parent.mkdir(parents=True, exist_ok=True)
+    temporary_file = settings_file.with_suffix(".json.tmp")
+    temporary_file.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary_file.replace(settings_file)
+
+
+def load_language() -> str:
+    language = load_settings().get("language", "en")
     return language if language in {"en", "fr"} else "en"
 
 
 def save_language(language: str) -> None:
     if language not in {"en", "fr"}:
         raise ValueError(f"Unsupported language: {language}")
-    settings_file = settings_directory() / "kinetho_settings.json"
-    temporary_file = settings_file.with_suffix(".json.tmp")
-    temporary_file.write_text(json.dumps({"language": language}, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary_file.replace(settings_file)
+    settings = load_settings()
+    settings["language"] = language
+    _write_settings(settings)
+
+
+def remembered_path(key: str) -> Path | None:
+    """Return a folder or file chosen in an earlier session, if it still exists."""
+    folders = load_settings().get("folders")
+    value = folders.get(key) if isinstance(folders, dict) else None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    path = Path(value).expanduser()
+    return path if path.exists() else None
+
+
+def remember_path(key: str, path: str | Path) -> bool:
+    if key not in REMEMBERED_FOLDER_KEYS:
+        raise ValueError(f"Unknown remembered folder: {key}")
+    text = str(path).strip()
+    if not text:
+        return False
+    settings = load_settings()
+    folders = settings.get("folders")
+    folders = dict(folders) if isinstance(folders, dict) else {}
+    folders[key] = str(Path(text).expanduser().resolve())
+    settings["folders"] = folders
+    try:
+        _write_settings(settings)
+    except OSError:
+        # Remembering a folder is a convenience; processing must not fail because of it.
+        return False
+    return True
 
 
 def translate(text: str, language: str) -> str:

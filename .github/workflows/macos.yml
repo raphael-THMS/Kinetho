@@ -2,28 +2,57 @@ name: Build Kinetho for macOS
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the tested packages as a GitHub pre-release
+        type: boolean
+        default: false
+      release_tag:
+        description: New pre-release tag matching the application version
+        type: string
+        default: v0.3.0-macos.1
 
 permissions:
   contents: read
 
 jobs:
   build:
-    runs-on: macos-14
+    name: Build ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            python_arch: arm64
+            runner: macos-14
+            minimum: "14.0"
+            label: Apple-Silicon
+          - arch: x86_64
+            python_arch: x64
+            runner: macos-15-intel
+            minimum: "13.0"
+            label: Intel-Ventura
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
-      MACOSX_DEPLOYMENT_TARGET: "14.0"
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.minimum }}
+      KINETHO_MAC_ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-          architecture: arm64
-      - name: Check native Apple Silicon and Tkinter
+          architecture: ${{ matrix.python_arch }}
+      - name: Check native architecture and Tkinter
         run: |
-          test "$(uname -m)" = "arm64"
-          python3 -c "import platform, tkinter; assert platform.machine() == 'arm64'; root = tkinter.Tk(); root.withdraw(); root.destroy()"
+          test "$(uname -m)" = "$KINETHO_MAC_ARCH"
+          python3 -c "import os, platform, tkinter; assert platform.machine() == os.environ['KINETHO_MAC_ARCH']; root = tkinter.Tk(); root.withdraw(); root.destroy()"
+      - name: Validate Mac build rules
+        run: |
+          python3 -m unittest discover -s tests -p test_macos_build.py -v
+          python3 -m unittest discover -s tests -p test_macos_publish.py -v
       - name: Install build tools
-        run: brew install pkg-config
+        run: brew install pkg-config nasm
       - name: Build standalone FFmpeg and x264 with corresponding sources
         run: python3 scripts/build_ffmpeg_macos.py
       - name: Build Kinetho app, ZIP and DMG
@@ -31,12 +60,36 @@ jobs:
       - name: Test bundled runtime and FFmpeg
         run: |
           python3 scripts/smoke_macos.py
-          codesign --verify --deep --strict .build-mac/dist/Kinetho.app
+          codesign --verify --deep --strict ".build-mac/$KINETHO_MAC_ARCH/dist/Kinetho.app"
           hdiutil verify release-mac/*.dmg
       - name: Upload user-ready packages
         uses: actions/upload-artifact@v4
         with:
-          name: Kinetho-macOS-Apple-Silicon
+          name: Kinetho-macOS-${{ matrix.label }}
           path: release-mac/*
           if-no-files-found: error
           retention-days: 30
+
+  publish:
+    name: Publish Mac pre-release
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate publication safeguards
+        run: python3 -m unittest discover -s tests -p test_macos_publish.py -v
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Kinetho-macOS-*
+          merge-multiple: true
+          path: release-mac
+      - name: Publish tested packages from this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: python3 scripts/publish_macos.py

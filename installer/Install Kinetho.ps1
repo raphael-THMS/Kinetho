@@ -6,7 +6,7 @@ $packageApp = Join-Path $PSScriptRoot 'Kinetho App'
 $defaultInstallPath = Join-Path $env:LOCALAPPDATA 'Programs\Kinetho'
 $logoPath = Join-Path $packageApp 'kinetho_logo_white.png'
 if (-not (Test-Path -LiteralPath $logoPath)) {
-    $logoPath = Join-Path $packageApp 'Kinetho.ico'
+    $logoPath = Join-Path $packageApp '_internal\Kinetho.ico'
 }
 
 $texts = @{
@@ -248,6 +248,15 @@ $installButton.Add_Click({
 
     try {
         New-Item -ItemType Directory -Path $destination -Force | Out-Null
+        $dataDirectory = Join-Path $destination 'data'
+        New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
+        foreach ($name in @('points.txt', 'kinetho_settings.json')) {
+            $legacy = Join-Path $destination $name
+            $target = Join-Path $dataDirectory $name
+            if ((Test-Path -LiteralPath $legacy) -and -not (Test-Path -LiteralPath $target)) {
+                Move-Item -LiteralPath $legacy -Destination $target
+            }
+        }
         # Stale libraries from a previous version could conflict with the new ones.
         $previousLibraries = Join-Path $destination '_internal'
         if (Test-Path -LiteralPath $previousLibraries) {
@@ -257,7 +266,7 @@ $installButton.Add_Click({
         if ($files.Count -eq 0) {
             throw (T 'MissingFiles')
         }
-        $preservedFiles = @('points.txt')
+        $preservedFiles = @('data\points.txt', 'data\kinetho_settings.json')
         foreach ($file in $files) {
             $relativePath = $file.FullName.Substring($packageApp.Length).TrimStart('\')
             $targetPath = Join-Path $destination $relativePath
@@ -270,12 +279,15 @@ $installButton.Add_Click({
             [System.Windows.Forms.Application]::DoEvents()
         }
 
-        foreach ($relativePath in @('Videos', 'Image folders', 'Video edition\Videos_before_modifications')) {
-            New-Item -ItemType Directory -Path (Join-Path $destination $relativePath) -Force | Out-Null
+        foreach ($name in @('Kinetho.ico', 'kinetho_logo.png', 'kinetho_logo_white.png', 'README-fr.md', 'LICENSE', 'Uninstall Kinetho.ps1')) {
+            $legacy = Join-Path $destination $name
+            if (Test-Path -LiteralPath $legacy -PathType Leaf) {
+                Remove-Item -LiteralPath $legacy -Force
+            }
         }
 
         # Start Kinetho in the language chosen here, unless the user already picked one in the app.
-        $settingsFile = Join-Path $destination 'kinetho_settings.json'
+        $settingsFile = Join-Path $dataDirectory 'kinetho_settings.json'
         if (-not (Test-Path -LiteralPath $settingsFile)) {
             [System.IO.File]::WriteAllText($settingsFile, "{`n  `"language`": `"$script:language`"`n}", (New-Object System.Text.UTF8Encoding($false)))
         }
@@ -287,7 +299,7 @@ $installButton.Add_Click({
             $shortcut = $shell.CreateShortcut($shortcutPath)
             $shortcut.TargetPath = Join-Path $destination 'Kinetho.exe'
             $shortcut.WorkingDirectory = $destination
-            $shortcut.IconLocation = (Join-Path $destination 'Kinetho.ico') + ',0'
+            $shortcut.IconLocation = (Join-Path $destination 'Kinetho.exe') + ',0'
             $shortcut.Description = T 'ShortcutComment'
             $shortcut.Save()
         }

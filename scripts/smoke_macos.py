@@ -6,13 +6,15 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from macos import build_target
 
 
 def main() -> None:
     if sys.platform != "darwin":
         raise RuntimeError("Test the compiled Mac application on macOS.")
+    architecture, _minimum = build_target()
     root = Path(__file__).resolve().parent.parent
-    application = root / ".build-mac" / "dist" / "Kinetho.app"
+    application = root / ".build-mac" / architecture / "dist" / "Kinetho.app"
     executable = application / "Contents" / "MacOS" / "Kinetho"
     with tempfile.TemporaryDirectory(prefix="Kinetho-test-home-") as temporary:
         folder = Path(temporary)

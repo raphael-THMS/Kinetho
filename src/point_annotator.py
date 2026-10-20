@@ -10,15 +10,13 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from PIL import Image, ImageTk
 
 from branding import BRAND_BACKGROUND, BRAND_BLACK, BRAND_NAME, BRAND_RED, load_logo, load_window_icon
-from localization import load_language, translate
+from localization import load_language, remember_path, remembered_path, translate
 from scale_calibration import SCALE_COLUMNS, ScaleCalibration
-from app_paths import WORKSPACE_DIR, points_file
+from app_paths import points_file
 
 
 APP_DIR = Path(__file__).resolve().parent
 FROZEN = getattr(sys, "frozen", False)
-APP_ROOT = WORKSPACE_DIR
-INPUT_DIR = APP_ROOT / "Image folders"
 POINTS_FILE = points_file()
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 POINT_COLORS = [
@@ -370,7 +368,18 @@ class PointAnnotator:
         return POINT_COLORS[self.point_names.index(name) % len(POINT_COLORS)]
 
     def choose_folder(self) -> None:
-        initial_dir = self.current_folder or (INPUT_DIR if INPUT_DIR.is_dir() else APP_DIR.parent)
+        initial_dir = next(
+            (
+                folder
+                for folder in (
+                    self.current_folder,
+                    remembered_path("annotation_folder"),
+                    remembered_path("frames_output"),
+                )
+                if folder is not None and folder.is_dir()
+            ),
+            Path.home(),
+        )
         folder = filedialog.askdirectory(
             title=translate("Select the folder containing images", self.language), initialdir=initial_dir
         )
@@ -378,10 +387,7 @@ class PointAnnotator:
             self.load_folder(Path(folder))
 
     def open_default_folder(self) -> None:
-        if INPUT_DIR.is_dir() and any(path.is_file() for path in INPUT_DIR.iterdir()):
-            self.load_folder(INPUT_DIR)
-        else:
-            self.choose_folder()
+        self.choose_folder()
 
     def load_folder(self, folder: Path) -> None:
         paths = sorted(
@@ -409,6 +415,7 @@ class PointAnnotator:
             return
         self._cancel_scale_placement()
         self.update_scale_status()
+        remember_path("annotation_folder", folder)
         self.folder_label.configure(text=str(folder))
         self.show_current_image()
 

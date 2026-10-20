@@ -1,40 +1,10 @@
 # Kinetho
 
-## Échelle dans l’annotateur de points
-
-Dans un dossier d’images, affichez l’image de référence puis ouvrez le menu **Échelle**
-en haut à droite et choisissez **Définir l’échelle**. Dans la même fenêtre, saisissez
-la longueur réelle (par exemple `10`, ou `10,5`) et l’unité (`cm`, `mm`, `m`...),
-puis cliquez sur les deux extrémités de l’échelle. Elles apparaissent en cyan sans modifier
-la liste des points à annoter et sans passer automatiquement à l’image suivante.
-Une seule échelle est enregistrée par dossier. **Voir l’image de référence** permet de la
-retrouver ; **Définir l’échelle** permet de la remplacer et **Supprimer l’échelle** de la retirer.
-Changer d’image ou d’outil, ou appuyer sur Suppr pendant le placement, annule un placement
-inachevé et conserve l’échelle précédente.
-
-L’échelle complète est enregistrée immédiatement dans `annotations.csv`, dans les colonnes
-`scale_image`, `scale_x1`, `scale_y1`, `scale_x2`, `scale_y2`, `scale_length`, `scale_unit`,
-`scale_pixels` et `scale_units_per_pixel`. Ces valeurs sont répétées sur chaque ligne pour
-faciliter l’exploitation du tableau. Les coordonnées correspondent aux pixels de l’image
-originale, même après zoom ou déplacement ; `scale_pixels` est la distance entre les extrémités
-et `scale_units_per_pixel` vaut longueur réelle / distance en pixels.
-Dans la fenêtre de définition, choisissez **Pixels** ou **Unité réelle saisie ci-dessus**
-pour les coordonnées de sortie `x,y`. En unité réelle, chaque coordonnée est multipliée
-par `scale_units_per_pixel` ; `x_pixel,y_pixel` conservent les pixels d’origine pour la reprise.
-`coordinate_space` indique `pixel` ou `real` et `coordinate_unit` indique `px` ou l’unité saisie.
-L’origine reste en haut à gauche, x vers la droite et y vers le bas, sans rotation des axes.
-Les extrémités `scale_x1,scale_y1,scale_x2,scale_y2` restent toujours en pixels.
-Le choix est mémorisé avec l’échelle, et remplacer ou supprimer l’échelle recalcule l’export
-à partir des pixels d’origine. Sans échelle, une confirmation à la fermeture propose de
-revenir à l’annotateur (Non) ou d’enregistrer en pixels et fermer (Oui).
-L’échelle est rechargée à la réouverture du dossier. Sans échelle,
-le CSV conserve son format à quatre colonnes ; les anciens CSV restent lisibles.
-La conversion n’est pertinente pour les autres images que si le cadrage et l’échelle
-physique restent identiques. Ouvrir puis enregistrer ce CSV avec une ancienne version de
-Kinetho pourrait supprimer les colonnes d’échelle et interpréter les unités réelles comme
-des pixels : utilisez uniquement la version mise à jour pour reprendre ces fichiers.
-
 Kinetho est une application Windows pour préparer des vidéos, en extraire des images et annoter des points sur celles-ci.
+
+## Versions Mac De Test
+
+Des versions de test sont préparées pour Intel (Ventura 13+) et Apple Silicon (macOS 14+). Après réussite du workflow de construction et publication, téléchargez le fichier `macOS-x86_64.dmg` ou `macOS-arm64.dmg` correspondant depuis la [liste des releases](https://github.com/raphael-THMS/Kinetho/releases), préversions comprises. La dernière release stable peut rester réservée à Windows. Python et FFmpeg sont intégrés ; les archives de sources ne sont pas des installateurs. Ces versions ne sont pas notarisées par Apple et doivent être testées sur le Mac cible. Voir le [guide utilisateur Mac](README-Installation-Mac.md) et les [instructions de construction et publication](README-Mac.md).
 
 ## Installer Kinetho
 
@@ -63,10 +33,15 @@ L’EXE distribué n’est pas signé. Windows SmartScreen ou les règles de sé
 
 ## Données et dossiers
 
+Sous Windows, seuls `Kinetho.exe` et un `README.md` de démarrage restent à la
+racine. Conservez les dossiers `data` (points et préférences), `docs` (guides
+et licence MIT), `_internal` (ressources et environnement) et `ffmpeg` (vidéo
+et licences). Les réglages sont dans `data\kinetho_settings.json`, les points
+dans `data\points.txt`. Les anciens réglages sont migrés sans réinitialisation ;
+conservez `data` lors des mises à jour. L'organisation macOS ne change pas.
+
 - `%LOCALAPPDATA%\Programs\Kinetho\` : application installée, FFmpeg, et configuration des noms de points
-- `Video edition\Videos_before_modifications\` : vidéos source
-- `Videos\` : vidéos traitées
-- `Image folders\` : images extraites, regroupées par vidéo source
+- Vidéos source, vidéos traitées et images extraites : enregistrées dans les dossiers que vous choisissez dans Kinetho. Les derniers dossiers utilisés sont mémorisés dans `kinetho_settings.json`.
 - `annotations.csv` : annotations enregistrées à côté des images
 
 Les vidéos, images extraites et annotations ne sont pas incluses dans le paquet logiciel. La désinstallation les conserve.
